@@ -78,7 +78,5 @@ export async function findLatestSession(
   query: SessionQuery,
 ): Promise<SavedSession | null> {
   const sessions = await findSessions(path, query);
-  return sessions
-    .toSorted((a, b) => a.savedAt.localeCompare(b.savedAt))
-    .at(-1) ?? null;
+  return [...sessions].sort((a, b) => a.savedAt.localeCompare(b.savedAt)).at(-1) ?? null;
 }

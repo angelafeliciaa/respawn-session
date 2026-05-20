@@ -45,8 +45,8 @@ export function locateTranscript(
     .filter((session): session is LocatedTranscript => Boolean(session))
     .filter((session) => !desiredId || session.sessionId === desiredId);
 
-  return candidates
-    .toSorted((a, b) => statSync(a.path).mtimeMs - statSync(b.path).mtimeMs)
+  return [...candidates]
+    .sort((a, b) => statSync(a.path).mtimeMs - statSync(b.path).mtimeMs)
     .at(-1) ?? null;
 }
 
