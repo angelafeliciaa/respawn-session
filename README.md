@@ -19,7 +19,7 @@ gh auth status
 
 ## Usage
 
-Initialize local storage and install a Claude Code Stop hook:
+Initialize local storage and install autosave Stop hooks for Claude Code and Codex:
 
 ```sh
 respawn init
@@ -31,10 +31,29 @@ Save the current active agent session from inside a git worktree:
 respawn save
 ```
 
+Autosave is what the installed hooks run. It skips unchanged transcripts so repeated Stop events do not create duplicate gists:
+
+```sh
+respawn autosave
+```
+
 Resume the latest saved session for a branch:
 
 ```sh
 respawn angela/fix-bugs
+```
+
+Attach the latest saved session to the current GitHub PR:
+
+```sh
+respawn tag
+```
+
+Resume from a tagged PR, even if the branch was deleted:
+
+```sh
+respawn 123
+respawn https://github.com/org/repo/pull/123
 ```
 
 List saved sessions:
@@ -65,6 +84,8 @@ The local index lives at:
 ```
 
 Branches can have multiple saved sessions. `respawn <branch>` restores the newest `savedAt` entry for the current repo and branch. `respawn list` shows every saved entry so older sessions remain discoverable.
+
+`respawn tag` writes a hidden metadata comment to the current PR. The comment stores session pointers, not the transcript body. Transcripts still live in your private gists. This lets `respawn <pr-url|number>` recover the newest tagged session after a branch is merged or deleted.
 
 ## Agent Paths
 

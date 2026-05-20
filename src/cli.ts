@@ -1,8 +1,9 @@
 #!/usr/bin/env bun
 import { initRespawn } from "./commands/init";
 import { listSessions } from "./commands/list";
-import { resumeSession } from "./commands/resume";
+import { resumePrSession, resumeSession } from "./commands/resume";
 import { saveSession } from "./commands/save";
+import { tagCurrentPr } from "./commands/tag";
 
 export type Route =
   | { name: "help" }
@@ -10,7 +11,9 @@ export type Route =
   | { name: "autosave" }
   | { name: "list" }
   | { name: "init" }
-  | { name: "resume"; branch: string };
+  | { name: "tag" }
+  | { name: "resume"; branch: string }
+  | { name: "resume-pr"; prRef: string };
 
 export function route(args: string[]): Route {
   const [command] = args;
@@ -21,9 +24,13 @@ export function route(args: string[]): Route {
     command === "save" ||
     command === "autosave" ||
     command === "list" ||
-    command === "init"
+    command === "init" ||
+    command === "tag"
   ) {
     return { name: command };
+  }
+  if (isPrRef(command)) {
+    return { name: "resume-pr", prRef: command };
   }
   return { name: "resume", branch: command };
 }
@@ -50,8 +57,15 @@ export async function main(args = Bun.argv.slice(2)): Promise<void> {
     console.log(await initRespawn());
     return;
   }
+  if (selected.name === "tag") {
+    console.log((await tagCurrentPr()).message);
+    return;
+  }
 
-  const result = await resumeSession(selected.branch);
+  const result =
+    selected.name === "resume-pr"
+      ? await resumePrSession(selected.prRef)
+      : await resumeSession(selected.branch);
   const [cmd, ...cmdArgs] = result.command;
   const proc = Bun.spawn([cmd, ...cmdArgs], {
     stdin: "inherit",
@@ -66,10 +80,16 @@ function helpText(): string {
     "Usage:",
     "  respawn save",
     "  respawn autosave",
+    "  respawn tag",
     "  respawn <branch>",
+    "  respawn <pr-url|number>",
     "  respawn list",
     "  respawn init",
   ].join("\n");
+}
+
+function isPrRef(value: string): boolean {
+  return /^\d+$/.test(value) || /github\.com\/[^/]+\/[^/]+\/pull\/\d+/.test(value);
 }
 
 if (import.meta.main) {

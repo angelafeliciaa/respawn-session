@@ -251,6 +251,12 @@ test("route maps raw argv to commands", () => {
   expect(route(["autosave"]).name).toBe("autosave");
   expect(route(["list"]).name).toBe("list");
   expect(route(["init"]).name).toBe("init");
+  expect(route(["tag"]).name).toBe("tag");
+  expect(route(["123"])).toEqual({ name: "resume-pr", prRef: "123" });
+  expect(route(["https://github.com/org/repo/pull/123"])).toEqual({
+    name: "resume-pr",
+    prRef: "https://github.com/org/repo/pull/123",
+  });
   expect(route(["angela/fix-bugs"])).toEqual({
     name: "resume",
     branch: "angela/fix-bugs",
