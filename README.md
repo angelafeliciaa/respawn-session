@@ -43,6 +43,47 @@ List saved sessions:
 respawn list
 ```
 
+## Publishing
+
+Before publishing, confirm the local runtime and GitHub CLI auth are ready:
+
+```sh
+bun --version
+gh auth status
+```
+
+Run npm's packaging checks first:
+
+```sh
+npm pack --dry-run
+npm publish --dry-run
+```
+
+Publish the package:
+
+```sh
+npm publish
+```
+
+If npm returns a 403 saying two-factor authentication is required, publish with a current OTP code:
+
+```sh
+npm publish --otp <your-current-2fa-code>
+```
+
+After publish, users can install the CLI globally:
+
+```sh
+npm install -g respawn-session
+respawn list
+```
+
+One-off `npx` usage can download the package, but the bin still uses `#!/usr/bin/env bun`, so Bun must be installed:
+
+```sh
+npx respawn-session list
+```
+
 ## How It Works
 
 `respawn save` detects the active agent in this order:
