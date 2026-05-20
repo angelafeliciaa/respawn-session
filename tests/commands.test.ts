@@ -287,6 +287,7 @@ test("route maps raw argv to commands", () => {
   expect(route(["autosave"]).name).toBe("autosave");
   expect(route(["list"]).name).toBe("list");
   expect(route(["init"]).name).toBe("init");
+  expect(route(["import"]).name).toBe("import");
   expect(route(["tag"]).name).toBe("tag");
   expect(route(["version"]).name).toBe("version");
   expect(route(["--version"]).name).toBe("version");

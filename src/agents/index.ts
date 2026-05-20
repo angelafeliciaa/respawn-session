@@ -1,4 +1,5 @@
 import type { LocatedTranscript, LocateOptions } from "./types";
+import type { ImportableTranscript } from "./types";
 import * as claude from "./claude";
 import * as codex from "./codex";
 
@@ -9,6 +10,10 @@ export function locateActiveTranscript(
     claude.locateTranscript(options) ??
     codex.locateTranscript(options)
   );
+}
+
+export function listAllTranscripts(options: LocateOptions = {}): ImportableTranscript[] {
+  return [...claude.listTranscripts(options), ...codex.listTranscripts(options)];
 }
 
 export function resumeCmd(agent: LocatedTranscript["agent"], sessionId: string): string[] {

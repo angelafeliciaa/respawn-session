@@ -1,7 +1,7 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { LocatedTranscript, LocateOptions } from "./types";
+import type { ImportableTranscript, LocatedTranscript, LocateOptions } from "./types";
 
 export function encodeClaudeProjectPath(cwd: string): string {
   return cwd.replace(/[^A-Za-z0-9._-]/g, "-");
@@ -37,6 +37,37 @@ export function locateTranscript(
 
 export function resumeCmd(sessionId: string): string[] {
   return ["claude", "--resume", sessionId];
+}
+
+export function listTranscripts(options: LocateOptions = {}): ImportableTranscript[] {
+  const home = options.home ?? homedir();
+  const sessionsDir = join(home, ".claude", "sessions");
+  if (!existsSync(sessionsDir)) return [];
+
+  return readdirSync(sessionsDir, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.endsWith(".json"))
+    .map((entry) => readSessionRecord(join(sessionsDir, entry.name)))
+    .filter(
+      (record): record is Required<Pick<ClaudeSessionRecord, "sessionId" | "cwd">> &
+        ClaudeSessionRecord => Boolean(record?.sessionId && record.cwd),
+    )
+    .map((record): ImportableTranscript | null => {
+      const path = transcriptPath(record.sessionId, {
+        ...options,
+        cwd: record.cwd,
+      });
+      if (!existsSync(path)) return null;
+      return {
+        agent: "claude" as const,
+        path,
+        sessionId: record.sessionId,
+        cwd: record.cwd,
+        savedAt: record.updatedAt
+          ? new Date(record.updatedAt).toISOString()
+          : undefined,
+      };
+    })
+    .filter((transcript): transcript is ImportableTranscript => transcript !== null);
 }
 
 type ClaudeSessionRecord = {

@@ -1,7 +1,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join, relative } from "node:path";
-import type { LocatedTranscript, LocateOptions } from "./types";
+import type { ImportableTranscript, LocatedTranscript, LocateOptions } from "./types";
 
 const uuidPattern =
   /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
@@ -52,6 +52,30 @@ export function locateTranscript(
 
 export function resumeCmd(sessionId: string): string[] {
   return ["codex", "resume", sessionId];
+}
+
+export function listTranscripts(options: LocateOptions = {}): ImportableTranscript[] {
+  const home = options.home ?? homedir();
+  const sessionsDir = codexSessionsDir(home);
+  if (!existsSync(sessionsDir)) return [];
+
+  return walkJsonl(sessionsDir)
+    .map((path): ImportableTranscript | null => {
+      const meta = readCodexMeta(path);
+      const sessionId = meta?.id ?? sessionIdFromCodexPath(path);
+      if (!sessionId || !meta?.cwd) return null;
+
+      const rel = relative(sessionsDir, path);
+      return {
+        agent: "codex" as const,
+        path,
+        sessionId,
+        cwd: meta.cwd,
+        relativePath: rel.startsWith("..") ? undefined : rel,
+        savedAt: statSync(path).mtime.toISOString(),
+      };
+    })
+    .filter((transcript): transcript is ImportableTranscript => transcript !== null);
 }
 
 function locatedFromPath(

@@ -1,6 +1,6 @@
 {
   "name": "respawn-session",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "description": "Save and resume Claude Code or Codex agent sessions by git branch.",
   "type": "module",
   "bin": {

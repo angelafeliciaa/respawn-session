@@ -7,6 +7,11 @@ export type LocatedTranscript = {
   relativePath?: string;
 };
 
+export type ImportableTranscript = LocatedTranscript & {
+  cwd: string;
+  savedAt?: string;
+};
+
 export type LocateOptions = {
   cwd?: string;
   home?: string;

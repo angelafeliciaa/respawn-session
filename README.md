@@ -107,6 +107,16 @@ Show every saved session in your local index:
 respawn list
 ```
 
+### Import Existing Sessions
+
+Backfill sessions that already exist on this machine:
+
+```sh
+respawn import
+```
+
+Import scans Claude Code and Codex transcripts, groups them by their recorded cwd, and saves sessions whose cwd is still an available git worktree. It skips transcripts that are already in `~/.respawn/index.json` and skips deleted or non-git worktrees.
+
 ## Commands
 
 | Command | What it does |
@@ -115,6 +125,7 @@ respawn list
 | `respawn save` | Saves the active Claude Code or Codex transcript |
 | `respawn autosave` | Saves only if the transcript changed |
 | `respawn tag` | Saves and attaches session metadata to the current PR |
+| `respawn import` | Backfills existing local Claude Code and Codex sessions |
 | `respawn <branch>` | Restores the newest session for a branch |
 | `respawn <pr-number>` | Restores the newest session from a tagged PR |
 | `respawn <pr-url>` | Restores the newest session from a tagged PR URL |

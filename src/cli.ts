@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 import { initRespawn } from "./commands/init";
+import { importSessions } from "./commands/import";
 import { listSessions } from "./commands/list";
 import { resumePrSession, resumeSession } from "./commands/resume";
 import { saveSession } from "./commands/save";
@@ -12,6 +13,7 @@ export type Route =
   | { name: "autosave" }
   | { name: "list" }
   | { name: "init" }
+  | { name: "import" }
   | { name: "tag" }
   | { name: "version" }
   | { name: "update" }
@@ -31,6 +33,7 @@ export function route(args: string[]): Route {
     command === "autosave" ||
     command === "list" ||
     command === "init" ||
+    command === "import" ||
     command === "tag" ||
     command === "update"
   ) {
@@ -62,6 +65,10 @@ export async function main(args = Bun.argv.slice(2)): Promise<void> {
   }
   if (selected.name === "init") {
     console.log(await initRespawn());
+    return;
+  }
+  if (selected.name === "import") {
+    console.log((await importSessions()).message);
     return;
   }
   if (selected.name === "tag") {
@@ -100,6 +107,7 @@ function helpText(): string {
     "  respawn <pr-url|number>",
     "  respawn list",
     "  respawn init",
+    "  respawn import",
     "  respawn version",
     "  respawn update",
   ].join("\n");
