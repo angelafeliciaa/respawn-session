@@ -236,7 +236,10 @@ test("linkRepo dry-run reports matches without writing comments", async () => {
   });
 
   expect(result.message).toBe(
-    "Would link 1 PRs in internetbackyard/gnomos-app; 0 sessions unmatched",
+    [
+      "Would link 1 PRs in internetbackyard/gnomos-app; 0 sessions unmatched",
+      "  #1 feature (1 session)",
+    ].join("\n"),
   );
 });
 

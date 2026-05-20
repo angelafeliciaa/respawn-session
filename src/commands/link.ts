@@ -35,6 +35,7 @@ export async function linkRepo(
   const sessions = index.sessions.filter((session) => safeRepoKey(session.repo) === key);
   const prs = await (deps.listPullRequests ?? listPullRequests)(key);
   const used = new Set<SavedSession>();
+  const details: string[] = [];
   let linked = 0;
 
   for (const pr of prs) {
@@ -45,6 +46,9 @@ export async function linkRepo(
 
     for (const session of matches) used.add(session);
     linked += 1;
+    details.push(
+      `  #${pr.number} ${pr.headRefName} (${matches.length} ${plural(matches.length, "session")})`,
+    );
 
     if (!deps.dryRun) {
       const parsed = parseGitHubRepo(key);
@@ -69,7 +73,10 @@ export async function linkRepo(
     linked,
     dryRun: Boolean(deps.dryRun),
     unmatchedSessions,
-    message: `${prefix} ${linked} PRs in ${key}; ${unmatchedSessions} sessions unmatched`,
+    message: [
+      `${prefix} ${linked} PRs in ${key}; ${unmatchedSessions} ${plural(unmatchedSessions, "session")} unmatched`,
+      ...details,
+    ].join("\n"),
   };
 }
 
@@ -95,4 +102,8 @@ function safeRepoKey(repo: string): string | null {
   } catch {
     return null;
   }
+}
+
+function plural(count: number, noun: string): string {
+  return `${noun}${count === 1 ? "" : "s"}`;
 }
