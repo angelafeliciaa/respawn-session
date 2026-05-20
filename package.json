@@ -1,9 +1,20 @@
 {
   "name": "respawn-session",
   "version": "0.0.1",
+  "description": "Save and resume Claude Code or Codex agent sessions by git branch.",
   "type": "module",
   "bin": {
     "respawn": "./src/cli.ts"
+  },
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/angelafeliciaa/respawn-session.git"
   },
   "scripts": {
     "test": "bun test",
