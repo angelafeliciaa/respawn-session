@@ -22,25 +22,13 @@ export async function initRespawn(deps: InitDeps = {}): Promise<string> {
   const indexPath = deps.indexPath ?? defaultIndexPath(home);
   await writeIndex(indexPath, await readIndex(indexPath));
 
-  const settingsPath = join(home, ".claude", "settings.json");
-  const settings = await readSettings(settingsPath);
-  const stopHooks = settings.hooks?.Stop ?? [];
-  const command = "respawn save || true";
-  const alreadyInstalled = stopHooks.some((group) =>
-    group.hooks?.some((hook) => hook.command === command),
-  );
+  const command = "respawn autosave || true";
+  const claudePath = join(home, ".claude", "settings.json");
+  const codexPath = join(home, ".codex", "hooks.json");
+  await installStopHook(claudePath, command);
+  await installStopHook(codexPath, command);
 
-  if (!alreadyInstalled) {
-    stopHooks.push({
-      matcher: "",
-      hooks: [{ type: "command", command }],
-    });
-    settings.hooks = { ...settings.hooks, Stop: stopHooks };
-    await mkdir(dirname(settingsPath), { recursive: true });
-    await writeFile(settingsPath, `${JSON.stringify(settings, null, 2)}\n`);
-  }
-
-  return `Initialized respawn index at ${indexPath} and Claude Stop hook at ${settingsPath}`;
+  return `Initialized respawn index at ${indexPath} and autosave Stop hooks at ${claudePath} and ${codexPath}`;
 }
 
 async function readSettings(path: string): Promise<ClaudeSettings> {
@@ -50,4 +38,23 @@ async function readSettings(path: string): Promise<ClaudeSettings> {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return {};
     throw error;
   }
+}
+
+async function installStopHook(path: string, command: string): Promise<void> {
+  const settings = await readSettings(path);
+  const stopHooks = settings.hooks?.Stop ?? [];
+  const alreadyInstalled = stopHooks.some((group) =>
+    group.hooks?.some((hook) => hook.command === command),
+  );
+
+  if (!alreadyInstalled) {
+    stopHooks.push({
+      matcher: "",
+      hooks: [{ type: "command", command }],
+    });
+  }
+
+  settings.hooks = { ...settings.hooks, Stop: stopHooks };
+  await mkdir(dirname(path), { recursive: true });
+  await writeFile(path, `${JSON.stringify(settings, null, 2)}\n`);
 }

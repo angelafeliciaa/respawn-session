@@ -1,11 +1,12 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { recordSession } from "../src/index-file";
 import { saveSession } from "../src/commands/save";
 import { resumeSession } from "../src/commands/resume";
 import { listSessions } from "../src/commands/list";
+import { initRespawn } from "../src/commands/init";
 import { route } from "../src/cli";
 
 let dir: string;
@@ -20,12 +21,14 @@ afterEach(async () => {
 
 test("saveSession stores the active transcript gist for the current branch", async () => {
   const indexPath = join(dir, "index.json");
+  const transcriptPath = join(dir, "session.jsonl");
+  await writeFile(transcriptPath, "transcript\n");
 
   const result = await saveSession({
     indexPath,
     locateActiveTranscript: () => ({
       agent: "codex",
-      path: "/tmp/session.jsonl",
+      path: transcriptPath,
       sessionId: "session-1",
       relativePath: "2026/05/20/session.jsonl",
     }),
@@ -44,6 +47,55 @@ test("saveSession stores the active transcript gist for the current branch", asy
     repo: "repo",
     sessionId: "session-1",
   });
+});
+
+test("saveSession autosave skips unchanged transcript hashes", async () => {
+  const indexPath = join(dir, "index.json");
+  const transcriptPath = join(dir, "session.jsonl");
+  let gists = 0;
+  await writeFile(transcriptPath, "same transcript\n");
+
+  const first = await saveSession({
+    indexPath,
+    mode: "autosave",
+    locateActiveTranscript: () => ({
+      agent: "codex",
+      path: transcriptPath,
+      sessionId: "session-1",
+      relativePath: "2026/05/20/session.jsonl",
+    }),
+    currentRepo: async () => "repo",
+    currentBranch: async () => "main",
+    currentSha: async () => "abc123",
+    createGist: async () => {
+      gists += 1;
+      return "https://gist.github.com/a/111";
+    },
+    now: () => new Date("2026-05-20T10:00:00.000Z"),
+  });
+  const second = await saveSession({
+    indexPath,
+    mode: "autosave",
+    locateActiveTranscript: () => ({
+      agent: "codex",
+      path: transcriptPath,
+      sessionId: "session-1",
+      relativePath: "2026/05/20/session.jsonl",
+    }),
+    currentRepo: async () => "repo",
+    currentBranch: async () => "main",
+    currentSha: async () => "abc123",
+    createGist: async () => {
+      gists += 1;
+      return "https://gist.github.com/a/222";
+    },
+    now: () => new Date("2026-05-20T10:01:00.000Z"),
+  });
+
+  expect(gists).toBe(1);
+  expect(first.saved).toBe(true);
+  expect(second.saved).toBe(false);
+  expect(second.message).toBe("No transcript changes to autosave for main");
 });
 
 test("saveSession fails clearly when no agent transcript is active", async () => {
@@ -126,8 +178,77 @@ test("listSessions prints every saved session, including repeated branches", asy
   );
 });
 
+test("initRespawn installs Claude and Codex autosave Stop hooks", async () => {
+  const message = await initRespawn({
+    home: dir,
+    indexPath: join(dir, ".respawn/index.json"),
+  });
+
+  const claudeSettings = JSON.parse(
+    await readFile(join(dir, ".claude/settings.json"), "utf8"),
+  ) as { hooks: { Stop: Array<{ hooks: Array<{ command: string }> }> } };
+  const codexHooks = JSON.parse(
+    await readFile(join(dir, ".codex/hooks.json"), "utf8"),
+  ) as { hooks: { Stop: Array<{ hooks: Array<{ command: string }> }> } };
+
+  expect(message).toContain("Initialized respawn index");
+  expect(claudeSettings.hooks.Stop[0].hooks[0].command).toBe(
+    "respawn autosave || true",
+  );
+  expect(codexHooks.hooks.Stop[0].hooks[0].command).toBe(
+    "respawn autosave || true",
+  );
+});
+
+test("initRespawn preserves existing hooks and does not duplicate autosave", async () => {
+  const claudePath = join(dir, ".claude/settings.json");
+  const codexPath = join(dir, ".codex/hooks.json");
+  await mkdir(join(dir, ".claude"), { recursive: true });
+  await mkdir(join(dir, ".codex"), { recursive: true });
+  await writeFile(
+    claudePath,
+    JSON.stringify({
+      hooks: {
+        Stop: [
+          { hooks: [{ type: "command", command: "notify" }] },
+          { hooks: [{ type: "command", command: "respawn autosave || true" }] },
+        ],
+      },
+    }),
+  );
+  await writeFile(
+    codexPath,
+    JSON.stringify({
+      hooks: {
+        Stop: [{ hooks: [{ type: "command", command: "notify" }] }],
+      },
+    }),
+  );
+
+  await initRespawn({ home: dir, indexPath: join(dir, ".respawn/index.json") });
+  await initRespawn({ home: dir, indexPath: join(dir, ".respawn/index.json") });
+
+  const claudeSettings = JSON.parse(await readFile(claudePath, "utf8")) as {
+    hooks: { Stop: Array<{ hooks: Array<{ command: string }> }> };
+  };
+  const codexHooks = JSON.parse(await readFile(codexPath, "utf8")) as {
+    hooks: { Stop: Array<{ hooks: Array<{ command: string }> }> };
+  };
+
+  const claudeAutosaves = claudeSettings.hooks.Stop.flatMap((group) =>
+    group.hooks.map((hook) => hook.command),
+  ).filter((command) => command === "respawn autosave || true");
+  const codexAutosaves = codexHooks.hooks.Stop.flatMap((group) =>
+    group.hooks.map((hook) => hook.command),
+  ).filter((command) => command === "respawn autosave || true");
+
+  expect(claudeAutosaves).toHaveLength(1);
+  expect(codexAutosaves).toHaveLength(1);
+});
+
 test("route maps raw argv to commands", () => {
   expect(route(["save"]).name).toBe("save");
+  expect(route(["autosave"]).name).toBe("autosave");
   expect(route(["list"]).name).toBe("list");
   expect(route(["init"]).name).toBe("init");
   expect(route(["angela/fix-bugs"])).toEqual({

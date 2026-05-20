@@ -7,6 +7,7 @@ import { saveSession } from "./commands/save";
 export type Route =
   | { name: "help" }
   | { name: "save" }
+  | { name: "autosave" }
   | { name: "list" }
   | { name: "init" }
   | { name: "resume"; branch: string };
@@ -16,7 +17,12 @@ export function route(args: string[]): Route {
   if (!command || command === "help" || command === "--help" || command === "-h") {
     return { name: "help" };
   }
-  if (command === "save" || command === "list" || command === "init") {
+  if (
+    command === "save" ||
+    command === "autosave" ||
+    command === "list" ||
+    command === "init"
+  ) {
     return { name: command };
   }
   return { name: "resume", branch: command };
@@ -30,6 +36,10 @@ export async function main(args = Bun.argv.slice(2)): Promise<void> {
   }
   if (selected.name === "save") {
     console.log((await saveSession()).message);
+    return;
+  }
+  if (selected.name === "autosave") {
+    console.log((await saveSession({ mode: "autosave" })).message);
     return;
   }
   if (selected.name === "list") {
@@ -55,6 +65,7 @@ function helpText(): string {
   return [
     "Usage:",
     "  respawn save",
+    "  respawn autosave",
     "  respawn <branch>",
     "  respawn list",
     "  respawn init",

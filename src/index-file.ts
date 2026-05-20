@@ -13,6 +13,7 @@ export type SavedSession = {
   agent: AgentName;
   savedAt: string;
   relativePath?: string;
+  transcriptHash?: string;
 };
 
 export type RespawnIndex = {
