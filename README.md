@@ -17,24 +17,18 @@ bun --version
 gh auth status
 ```
 
-## Usage
+## Quick Start
 
-Initialize local storage and install autosave Stop hooks for Claude Code and Codex:
+Initialize once on each machine. This creates `~/.respawn/index.json` and installs autosave Stop hooks for Claude Code and Codex:
 
 ```sh
 respawn init
 ```
 
-Save the current active agent session from inside a git worktree:
+Work normally in Claude Code or Codex. `respawn init` makes sessions autosave when the agent stops. To save immediately from inside an active agent session, run:
 
 ```sh
 respawn save
-```
-
-Autosave is what the installed hooks run. It skips unchanged transcripts so repeated Stop events do not create duplicate gists:
-
-```sh
-respawn autosave
 ```
 
 Resume the latest saved session for a branch:
@@ -43,24 +37,88 @@ Resume the latest saved session for a branch:
 respawn angela/fix-bugs
 ```
 
-Attach the latest saved session to the current GitHub PR:
-
-```sh
-respawn tag
-```
-
-Resume from a tagged PR, even if the branch was deleted:
+Resume from a PR that was tagged with `respawn tag`:
 
 ```sh
 respawn 123
 respawn https://github.com/org/repo/pull/123
 ```
 
-List saved sessions:
+## Common Workflows
+
+### Manual Branch Save
+
+Inside an active Claude Code or Codex session:
+
+```sh
+respawn save
+```
+
+Later, from a clone or worktree for the same repo:
+
+```sh
+respawn <branch>
+```
+
+Example:
+
+```sh
+respawn angela/fix-bugs
+```
+
+### Autosave
+
+Run this once per machine:
+
+```sh
+respawn init
+```
+
+After that, Claude Code and Codex Stop hooks run:
+
+```sh
+respawn autosave
+```
+
+Autosave hashes the transcript and skips unchanged sessions, so repeated Stop events do not create duplicate gists.
+
+### PR Tagging
+
+Use this when you want a session to survive branch deletion after merge:
+
+```sh
+respawn tag
+```
+
+That writes or updates a hidden metadata comment on the current GitHub PR. The comment stores session pointers, not the transcript body. Transcripts still live in your private gists.
+
+Later, resume from the PR:
+
+```sh
+respawn 123
+respawn https://github.com/org/repo/pull/123
+```
+
+### List Saved Sessions
+
+Show every saved session in your local index:
 
 ```sh
 respawn list
 ```
+
+## Commands
+
+| Command | What it does |
+| --- | --- |
+| `respawn init` | Creates the local index and installs autosave hooks |
+| `respawn save` | Saves the active Claude Code or Codex transcript |
+| `respawn autosave` | Saves only if the transcript changed |
+| `respawn tag` | Saves and attaches session metadata to the current PR |
+| `respawn <branch>` | Restores the newest session for a branch |
+| `respawn <pr-number>` | Restores the newest session from a tagged PR |
+| `respawn <pr-url>` | Restores the newest session from a tagged PR URL |
+| `respawn list` | Lists locally indexed sessions |
 
 ## How It Works
 
