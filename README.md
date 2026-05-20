@@ -101,6 +101,17 @@ respawn internetbackyard/gnomos-app#514
 respawn https://github.com/org/repo/pull/123
 ```
 
+### Link Imported Sessions To PRs
+
+After `respawn import`, sync saved sessions to matching PRs in a repo:
+
+```sh
+respawn link internetbackyard/gnomos-app --dry-run
+respawn link internetbackyard/gnomos-app
+```
+
+Link matches sessions to PRs by branch name first, then by PR head SHA when available. It only writes PR metadata comments; it does not upload transcripts.
+
 ### List Saved Sessions
 
 Show every saved session in your local index:
@@ -128,6 +139,8 @@ Import scans Claude Code and Codex transcripts, groups them by their recorded cw
 | `respawn autosave` | Saves only if the transcript changed |
 | `respawn tag` | Saves and attaches session metadata to the current PR |
 | `respawn import` | Backfills existing local Claude Code and Codex sessions |
+| `respawn link owner/repo` | Links imported sessions to matching PRs |
+| `respawn link owner/repo --dry-run` | Previews PR links without writing comments |
 | `respawn <branch>` | Restores the newest session for a branch |
 | `respawn owner/repo:branch` | Restores a branch session without being in that repo |
 | `respawn --repo owner/repo <branch>` | Restores a branch session for an explicit repo |

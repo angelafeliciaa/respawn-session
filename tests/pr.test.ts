@@ -5,9 +5,11 @@ import { tmpdir } from "node:os";
 import {
   decodeRespawnComment,
   encodeRespawnComment,
+  listPullRequests,
   parseGitHubRepo,
   upsertRespawnComment,
 } from "../src/github";
+import { linkRepo } from "../src/commands/link";
 import { tagCurrentPr } from "../src/commands/tag";
 import { resumePrSession } from "../src/commands/resume";
 import type { RunCommand } from "../src/shell";
@@ -96,6 +98,145 @@ test("upsertRespawnComment patches an existing hidden comment", async () => {
 
   expect(calls.at(-1)).toStartWith(
     "gh api repos/angelafeliciaa/respawn-session/issues/comments/IC_kw -X PATCH -f body=",
+  );
+});
+
+test("listPullRequests reads all PRs for an explicit repo", async () => {
+  const calls: string[] = [];
+  const run: RunCommand = async (cmd, args) => {
+    calls.push([cmd, ...args].join(" "));
+    return JSON.stringify([
+      {
+        number: 514,
+        url: "https://github.com/internetbackyard/gnomos-app/pull/514",
+        headRefName: "feat/int-1194-tool-actor-context",
+        headRefOid: "headsha",
+        state: "MERGED",
+        title: "actor context",
+      },
+    ]);
+  };
+
+  await expect(listPullRequests("internetbackyard/gnomos-app", run)).resolves.toEqual([
+    {
+      number: 514,
+      url: "https://github.com/internetbackyard/gnomos-app/pull/514",
+      headRefName: "feat/int-1194-tool-actor-context",
+      headRefOid: "headsha",
+      state: "MERGED",
+      title: "actor context",
+    },
+  ]);
+  expect(calls).toEqual([
+    "gh pr list --repo internetbackyard/gnomos-app --state all --limit 1000 --json number,url,headRefName,headRefOid,state,title",
+  ]);
+});
+
+test("linkRepo links sessions to PRs by branch and head sha", async () => {
+  const indexPath = join(dir, "index.json");
+  await writeFile(
+    indexPath,
+    JSON.stringify({
+      version: 1,
+      sessions: [
+        {
+          repo: "https://github.com/internetbackyard/gnomos-app",
+          branch: "feat/int-1194-tool-actor-context",
+          gistUrl: "gist-branch",
+          sessionId: "branch-session",
+          sha: "branchsha",
+          agent: "codex",
+          savedAt: "2026-05-20T10:00:00.000Z",
+        },
+        {
+          repo: "git@github.com:internetbackyard/gnomos-app.git",
+          branch: "staging",
+          gistUrl: "gist-head",
+          sessionId: "head-session",
+          sha: "headsha",
+          agent: "codex",
+          savedAt: "2026-05-20T11:00:00.000Z",
+        },
+        {
+          repo: "git@github.com:other/repo.git",
+          branch: "feat/int-1194-tool-actor-context",
+          gistUrl: "other",
+          sessionId: "other-session",
+          sha: "othersha",
+          agent: "codex",
+          savedAt: "2026-05-20T12:00:00.000Z",
+        },
+      ],
+    }),
+  );
+  const linked: number[] = [];
+
+  const result = await linkRepo("internetbackyard/gnomos-app", {
+    indexPath,
+    listPullRequests: async () => [
+      {
+        number: 514,
+        url: "https://github.com/internetbackyard/gnomos-app/pull/514",
+        headRefName: "feat/int-1194-tool-actor-context",
+        headRefOid: "headsha",
+        state: "MERGED",
+        title: "actor context",
+      },
+    ],
+    upsertRespawnComment: async ({ tag }) => {
+      linked.push(tag.pr);
+      expect(tag.sessions.map((session) => session.sessionId).sort()).toEqual([
+        "branch-session",
+        "head-session",
+      ]);
+      return tag;
+    },
+  });
+
+  expect(result).toMatchObject({ linked: 1, dryRun: false, unmatchedSessions: 0 });
+  expect(linked).toEqual([514]);
+});
+
+test("linkRepo dry-run reports matches without writing comments", async () => {
+  const indexPath = join(dir, "index.json");
+  await writeFile(
+    indexPath,
+    JSON.stringify({
+      version: 1,
+      sessions: [
+        {
+          repo: "internetbackyard/gnomos-app",
+          branch: "feature",
+          gistUrl: "gist",
+          sessionId: "session",
+          sha: "sha",
+          agent: "codex",
+          savedAt: "2026-05-20T10:00:00.000Z",
+        },
+      ],
+    }),
+  );
+
+  const result = await linkRepo("internetbackyard/gnomos-app", {
+    indexPath,
+    dryRun: true,
+    listPullRequests: async () => [
+      {
+        number: 1,
+        url: "https://github.com/internetbackyard/gnomos-app/pull/1",
+        headRefName: "feature",
+        state: "OPEN",
+        title: "feature",
+        commits: [],
+      },
+    ],
+    upsertRespawnComment: async () => {
+      throw new Error("dry-run should not write comments");
+    },
+  });
+
+  expect(result.message).toBe(
+    "Would link 1 PRs in internetbackyard/gnomos-app; 0 sessions unmatched",
   );
 });
 

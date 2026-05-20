@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 import { initRespawn } from "./commands/init";
 import { importSessions } from "./commands/import";
+import { linkRepo } from "./commands/link";
 import { listSessions } from "./commands/list";
 import { resumePrSession, resumeSession } from "./commands/resume";
 import { saveSession } from "./commands/save";
@@ -14,6 +15,7 @@ export type Route =
   | { name: "list" }
   | { name: "init" }
   | { name: "import" }
+  | { name: "link"; repo: string; dryRun: boolean }
   | { name: "tag" }
   | { name: "version" }
   | { name: "update" }
@@ -28,6 +30,14 @@ export function route(args: string[]): Route {
   }
   if (command === "version" || command === "--version" || command === "-v") {
     return { name: "version" };
+  }
+  if (command === "link") {
+    const linkArgs = rest.slice(1).filter((arg) => arg !== "--dry-run");
+    return {
+      name: "link",
+      repo: linkArgs[0] ?? "",
+      dryRun: rest.includes("--dry-run"),
+    };
   }
   if (
     command === "save" ||
@@ -72,6 +82,13 @@ export async function main(args = Bun.argv.slice(2)): Promise<void> {
     console.log((await importSessions()).message);
     return;
   }
+  if (selected.name === "link") {
+    if (!selected.repo) throw new Error("Usage: respawn link owner/repo [--dry-run]");
+    console.log(
+      (await linkRepo(selected.repo, { dryRun: selected.dryRun })).message,
+    );
+    return;
+  }
   if (selected.name === "tag") {
     console.log((await tagCurrentPr()).message);
     return;
@@ -112,6 +129,7 @@ function helpText(): string {
     "  respawn list",
     "  respawn init",
     "  respawn import",
+    "  respawn link owner/repo [--dry-run]",
     "  respawn version",
     "  respawn update",
   ].join("\n");

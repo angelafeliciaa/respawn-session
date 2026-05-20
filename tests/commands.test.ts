@@ -315,6 +315,21 @@ test("route maps raw argv to commands", () => {
   expect(route(["init"]).name).toBe("init");
   expect(route(["import"]).name).toBe("import");
   expect(route(["tag"]).name).toBe("tag");
+  expect(route(["link", "internetbackyard/gnomos-app"])).toEqual({
+    name: "link",
+    repo: "internetbackyard/gnomos-app",
+    dryRun: false,
+  });
+  expect(route(["link", "internetbackyard/gnomos-app", "--dry-run"])).toEqual({
+    name: "link",
+    repo: "internetbackyard/gnomos-app",
+    dryRun: true,
+  });
+  expect(route(["link", "--dry-run"])).toEqual({
+    name: "link",
+    repo: "",
+    dryRun: true,
+  });
   expect(route(["version"]).name).toBe("version");
   expect(route(["--version"]).name).toBe("version");
   expect(route(["update"]).name).toBe("update");

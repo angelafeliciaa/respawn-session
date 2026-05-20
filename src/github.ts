@@ -13,6 +13,10 @@ export type PrInfo = {
   number: number;
   url: string;
   headRefName: string;
+  headRefOid?: string;
+  state?: string;
+  title?: string;
+  commits?: Array<{ oid: string }>;
 };
 
 export type RespawnPrTag = {
@@ -86,6 +90,25 @@ export async function currentPr(run: RunCommand = runCommand): Promise<PrInfo> {
   return parsed;
 }
 
+export async function listPullRequests(
+  repo: string,
+  run: RunCommand = runCommand,
+): Promise<PrInfo[]> {
+  const raw = await run("gh", [
+    "pr",
+    "list",
+    "--repo",
+    repo,
+    "--state",
+    "all",
+    "--limit",
+    "1000",
+    "--json",
+    "number,url,headRefName,headRefOid,state,title",
+  ]);
+  return JSON.parse(raw) as PrInfo[];
+}
+
 export async function getRespawnTag(
   prRef: string,
   repo?: string,
@@ -107,10 +130,13 @@ export async function upsertRespawnComment(
   },
   run: RunCommand = runCommand,
 ): Promise<RespawnPrTag> {
+  const repo = `${input.owner}/${input.name}`;
   const raw = await run("gh", [
     "pr",
     "view",
     String(input.pr),
+    "--repo",
+    repo,
     "--json",
     "comments",
   ]);
@@ -128,7 +154,15 @@ export async function upsertRespawnComment(
       `body=${body}`,
     ]);
   } else {
-    await run("gh", ["pr", "comment", String(input.pr), "--body", body]);
+    await run("gh", [
+      "pr",
+      "comment",
+      String(input.pr),
+      "--repo",
+      repo,
+      "--body",
+      body,
+    ]);
   }
 
   return input.tag;
