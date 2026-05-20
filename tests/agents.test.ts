@@ -30,7 +30,14 @@ test("Claude encodes the current working directory in its project path", () => {
     encodeClaudeProjectPath(
       "/Users/angelafelicia/Library/Mobile Documents/project",
     ),
-  ).toBe("-Users-angelafelicia-Library-Mobile Documents-project");
+  ).toBe("-Users-angelafelicia-Library-Mobile-Documents-project");
+  expect(
+    encodeClaudeProjectPath(
+      "/Users/angelafelicia/Library/Mobile Documents/com~apple~CloudDocs/VSC/respawn-session",
+    ),
+  ).toBe(
+    "-Users-angelafelicia-Library-Mobile-Documents-com-apple-CloudDocs-VSC-respawn-session",
+  );
 });
 
 test("Claude locates the active session transcript from CLAUDE_SESSION_ID", async () => {
@@ -47,6 +54,45 @@ test("Claude locates the active session transcript from CLAUDE_SESSION_ID", asyn
       env: { CLAUDE_SESSION_ID: sessionId },
     }),
   ).toEqual({ agent: "claude", path, sessionId });
+});
+
+test("Claude falls back to the newest session registry entry for the current cwd", async () => {
+  const cwd = "/Users/angelafelicia/Library/Mobile Documents/com~apple~CloudDocs/VSC/respawn-session";
+  const oldSession = "11111111-1111-4111-8111-111111111111";
+  const newSession = "22222222-2222-4222-8222-222222222222";
+  const sessionsDir = join(home, ".claude", "sessions");
+  await mkdir(sessionsDir, { recursive: true });
+
+  await writeFile(
+    join(sessionsDir, "old.json"),
+    JSON.stringify({
+      sessionId: oldSession,
+      cwd,
+      status: "idle",
+      updatedAt: 1000,
+    }),
+  );
+  await writeFile(
+    join(sessionsDir, "new.json"),
+    JSON.stringify({
+      sessionId: newSession,
+      cwd,
+      status: "idle",
+      updatedAt: 2000,
+    }),
+  );
+
+  const path = claudeTranscriptPath(newSession, { cwd, home });
+  await mkdir(join(path, ".."), { recursive: true });
+  await writeFile(path, "{}\n");
+
+  expect(
+    locateClaudeTranscript({
+      cwd,
+      home,
+      env: {},
+    }),
+  ).toEqual({ agent: "claude", path, sessionId: newSession });
 });
 
 test("Claude resume command uses claude --resume", () => {

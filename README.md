@@ -124,7 +124,7 @@ respawn list
 
 `respawn save` detects the active agent in this order:
 
-1. Claude Code via `CLAUDE_SESSION_ID`
+1. Claude Code via `CLAUDE_SESSION_ID`, then `~/.claude/sessions/*.json`
 2. Codex via `CODEX_TUI_SESSION_LOG_PATH`, `CODEX_SESSION_ID`, or the newest `~/.codex/sessions/**.jsonl` transcript for the current cwd
 
 It then runs:
