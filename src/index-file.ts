@@ -12,6 +12,7 @@ export type SavedSession = {
   sha: string;
   agent: AgentName;
   savedAt: string;
+  relativePath?: string;
 };
 
 export type RespawnIndex = {
