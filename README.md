@@ -122,6 +122,12 @@ respawn list
 | `respawn version` | Prints the installed CLI version |
 | `respawn update` | Updates the global npm install to the latest release |
 
+If your installed version does not recognize `respawn update`, bootstrap once with:
+
+```sh
+npm install -g respawn-session@latest
+```
+
 ## How It Works
 
 `respawn save` detects the active agent in this order:
