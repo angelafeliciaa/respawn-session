@@ -149,6 +149,32 @@ test("resumeSession downloads the latest branch session and returns its resume c
   expect(result.command).toEqual(["codex", "resume", "new-session"]);
 });
 
+test("resumeSession can resolve a branch from an explicit repo", async () => {
+  const indexPath = join(dir, "index.json");
+  const restoredPath = join(dir, "home/.codex/sessions/2026/05/20/repo.jsonl");
+  await recordSession(indexPath, {
+    repo: "https://github.com/internetbackyard/gnomos-app",
+    branch: "staging",
+    gistUrl: "repo-gist",
+    sessionId: "repo-session",
+    sha: "abc123",
+    agent: "codex",
+    savedAt: "2026-05-20T11:00:00.000Z",
+    relativePath: "2026/05/20/repo.jsonl",
+  });
+
+  const result = await resumeSession("staging", {
+    repo: "internetbackyard/gnomos-app",
+    indexPath,
+    downloadGist: async () => "downloaded\n",
+    checkoutBranch: async () => {},
+    targetTranscriptPath: () => restoredPath,
+  });
+
+  expect(result.command).toEqual(["codex", "resume", "repo-session"]);
+});
+
+
 test("listSessions prints every saved session, including repeated branches", async () => {
   const indexPath = join(dir, "index.json");
   await recordSession(indexPath, {
@@ -293,9 +319,30 @@ test("route maps raw argv to commands", () => {
   expect(route(["--version"]).name).toBe("version");
   expect(route(["update"]).name).toBe("update");
   expect(route(["123"])).toEqual({ name: "resume-pr", prRef: "123" });
+  expect(route(["--repo", "internetbackyard/gnomos-app", "514"])).toEqual({
+    name: "resume-pr",
+    prRef: "514",
+    repo: "internetbackyard/gnomos-app",
+  });
+  expect(route(["--repo", "internetbackyard/gnomos-app", "staging"])).toEqual({
+    name: "resume",
+    branch: "staging",
+    repo: "internetbackyard/gnomos-app",
+  });
+  expect(route(["internetbackyard/gnomos-app#514"])).toEqual({
+    name: "resume-pr",
+    prRef: "514",
+    repo: "internetbackyard/gnomos-app",
+  });
+  expect(route(["internetbackyard/gnomos-app:staging"])).toEqual({
+    name: "resume",
+    branch: "staging",
+    repo: "internetbackyard/gnomos-app",
+  });
   expect(route(["https://github.com/org/repo/pull/123"])).toEqual({
     name: "resume-pr",
-    prRef: "https://github.com/org/repo/pull/123",
+    prRef: "123",
+    repo: "org/repo",
   });
   expect(route(["angela/fix-bugs"])).toEqual({
     name: "resume",

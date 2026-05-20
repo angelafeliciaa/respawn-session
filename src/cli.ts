@@ -17,11 +17,12 @@ export type Route =
   | { name: "tag" }
   | { name: "version" }
   | { name: "update" }
-  | { name: "resume"; branch: string }
-  | { name: "resume-pr"; prRef: string };
+  | { name: "resume"; branch: string; repo?: string }
+  | { name: "resume-pr"; prRef: string; repo?: string };
 
 export function route(args: string[]): Route {
-  const [command] = args;
+  const { repo, rest } = parseGlobalOptions(args);
+  const [command] = rest;
   if (!command || command === "help" || command === "--help" || command === "-h") {
     return { name: "help" };
   }
@@ -40,9 +41,9 @@ export function route(args: string[]): Route {
     return { name: command };
   }
   if (isPrRef(command)) {
-    return { name: "resume-pr", prRef: command };
+    return parsePrRoute(command, repo);
   }
-  return { name: "resume", branch: command };
+  return parseBranchRoute(command, repo);
 }
 
 export async function main(args = Bun.argv.slice(2)): Promise<void> {
@@ -86,8 +87,8 @@ export async function main(args = Bun.argv.slice(2)): Promise<void> {
 
   const result =
     selected.name === "resume-pr"
-      ? await resumePrSession(selected.prRef)
-      : await resumeSession(selected.branch);
+      ? await resumePrSession(selected.prRef, { repo: selected.repo })
+      : await resumeSession(selected.branch, { repo: selected.repo });
   const [cmd, ...cmdArgs] = result.command;
   const proc = Bun.spawn([cmd, ...cmdArgs], {
     stdin: "inherit",
@@ -105,6 +106,9 @@ function helpText(): string {
     "  respawn tag",
     "  respawn <branch>",
     "  respawn <pr-url|number>",
+    "  respawn owner/repo:branch",
+    "  respawn owner/repo#123",
+    "  respawn --repo owner/repo <branch|number>",
     "  respawn list",
     "  respawn init",
     "  respawn import",
@@ -114,7 +118,38 @@ function helpText(): string {
 }
 
 function isPrRef(value: string): boolean {
-  return /^\d+$/.test(value) || /github\.com\/[^/]+\/[^/]+\/pull\/\d+/.test(value);
+  return (
+    /^\d+$/.test(value) ||
+    /^[^/\s]+\/[^#:\s]+#\d+$/.test(value) ||
+    /github\.com\/[^/]+\/[^/]+\/pull\/\d+/.test(value)
+  );
+}
+
+function parseGlobalOptions(args: string[]): { repo?: string; rest: string[] } {
+  if (args[0] === "--repo") {
+    return { repo: args[1], rest: args.slice(2) };
+  }
+  return { rest: args };
+}
+
+function parsePrRoute(value: string, repo?: string): Route {
+  const url = value.match(/^https:\/\/github\.com\/([^/]+\/[^/]+)\/pull\/(\d+)$/);
+  if (url) return { name: "resume-pr", repo: url[1], prRef: url[2] };
+
+  const qualified = value.match(/^([^/\s]+\/[^#:\s]+)#(\d+)$/);
+  if (qualified) {
+    return { name: "resume-pr", repo: qualified[1], prRef: qualified[2] };
+  }
+
+  return { name: "resume-pr", prRef: value, repo };
+}
+
+function parseBranchRoute(value: string, repo?: string): Route {
+  const qualified = value.match(/^([^/\s]+\/[^#:\s]+):(.+)$/);
+  if (qualified) {
+    return { name: "resume", repo: qualified[1], branch: qualified[2] };
+  }
+  return { name: "resume", branch: value, repo };
 }
 
 if (import.meta.main) {

@@ -30,13 +30,30 @@ type GhComment = {
 
 export function parseGitHubRepo(remote: string): GitHubRepo {
   const trimmed = remote.trim();
+  const prUrl = trimmed.match(
+    /^https:\/\/github\.com\/([^/]+)\/([^/]+)\/pull\/\d+$/,
+  );
+  if (prUrl) return { owner: prUrl[1], name: prUrl[2].replace(/\.git$/, "") };
+
   const ssh = trimmed.match(/^git@github\.com:([^/]+)\/(.+?)(?:\.git)?$/);
   if (ssh) return { owner: ssh[1], name: ssh[2] };
 
   const https = trimmed.match(/^https:\/\/github\.com\/([^/]+)\/(.+?)(?:\.git)?$/);
   if (https) return { owner: https[1], name: https[2] };
 
+  const short = trimmed.match(/^([^/\s]+)\/([^/\s]+)$/);
+  if (short) return { owner: short[1], name: short[2].replace(/\.git$/, "") };
+
   throw new Error(`Unsupported GitHub remote: ${remote}`);
+}
+
+export function repoKey(remote: string): string {
+  const repo = parseGitHubRepo(remote);
+  return `${repo.owner}/${repo.name}`;
+}
+
+export function prNumberFromRef(prRef: string): string {
+  return prRef.match(/github\.com\/[^/]+\/[^/]+\/pull\/(\d+)/)?.[1] ?? prRef;
 }
 
 export function encodeRespawnComment(tag: RespawnPrTag): string {
@@ -71,9 +88,12 @@ export async function currentPr(run: RunCommand = runCommand): Promise<PrInfo> {
 
 export async function getRespawnTag(
   prRef: string,
+  repo?: string,
   run: RunCommand = runCommand,
 ): Promise<RespawnPrTag | null> {
-  const raw = await run("gh", ["pr", "view", prRef, "--json", "comments"]);
+  const args = ["pr", "view", prNumberFromRef(prRef), "--json", "comments"];
+  if (repo) args.push("--repo", repo);
+  const raw = await run("gh", args);
   const parsed = JSON.parse(raw) as { comments?: GhComment[] };
   return findRespawnComment(parsed.comments ?? [])?.tag ?? null;
 }
@@ -116,9 +136,12 @@ export async function upsertRespawnComment(
 
 export async function checkoutPr(
   prRef: string,
+  repo?: string,
   run: RunCommand = runCommand,
 ): Promise<void> {
-  await run("gh", ["pr", "checkout", prRef]);
+  const args = ["pr", "checkout", prNumberFromRef(prRef)];
+  if (repo) args.push("--repo", repo);
+  await run("gh", args);
 }
 
 function findRespawnComment(

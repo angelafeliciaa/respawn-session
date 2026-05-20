@@ -41,6 +41,7 @@ Resume from a PR that was tagged with `respawn tag`:
 
 ```sh
 respawn 123
+respawn internetbackyard/gnomos-app#514
 respawn https://github.com/org/repo/pull/123
 ```
 
@@ -96,6 +97,7 @@ Later, resume from the PR:
 
 ```sh
 respawn 123
+respawn internetbackyard/gnomos-app#514
 respawn https://github.com/org/repo/pull/123
 ```
 
@@ -127,8 +129,12 @@ Import scans Claude Code and Codex transcripts, groups them by their recorded cw
 | `respawn tag` | Saves and attaches session metadata to the current PR |
 | `respawn import` | Backfills existing local Claude Code and Codex sessions |
 | `respawn <branch>` | Restores the newest session for a branch |
+| `respawn owner/repo:branch` | Restores a branch session without being in that repo |
+| `respawn --repo owner/repo <branch>` | Restores a branch session for an explicit repo |
 | `respawn <pr-number>` | Restores the newest session from a tagged PR |
+| `respawn owner/repo#123` | Restores a tagged PR without being in that repo |
 | `respawn <pr-url>` | Restores the newest session from a tagged PR URL |
+| `respawn --repo owner/repo 123` | Restores a tagged PR for an explicit repo |
 | `respawn list` | Lists locally indexed sessions |
 | `respawn version` | Prints the installed CLI version |
 | `respawn update` | Updates the global npm install to the latest release |

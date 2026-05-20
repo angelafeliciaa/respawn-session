@@ -221,3 +221,37 @@ test("resumePrSession restores the newest session from PR metadata", async () =>
   expect(checkouts).toEqual(["123"]);
   expect(result.command).toEqual(["codex", "resume", "new-session"]);
 });
+
+test("resumePrSession supports an explicit repo", async () => {
+  const restoredPath = join(dir, "home/.codex/sessions/2026/05/20/session.jsonl");
+  const result = await resumePrSession("514", {
+    repo: "internetbackyard/gnomos-app",
+    getRespawnTag: async (prRef, repo) => {
+      expect(prRef).toBe("514");
+      expect(repo).toBe("internetbackyard/gnomos-app");
+      return {
+        version: 1,
+        repo: "https://github.com/internetbackyard/gnomos-app",
+        pr: 514,
+        branch: "staging",
+        sessions: [
+          {
+            repo: "https://github.com/internetbackyard/gnomos-app",
+            branch: "staging",
+            gistUrl: "gist",
+            sessionId: "session-514",
+            sha: "abc123",
+            agent: "codex",
+            savedAt: "2026-05-20T11:00:00.000Z",
+            relativePath: "2026/05/20/session.jsonl",
+          },
+        ],
+      };
+    },
+    downloadGist: async () => "downloaded\n",
+    checkoutPr: async () => {},
+    targetTranscriptPath: () => restoredPath,
+  });
+
+  expect(result.command).toEqual(["codex", "resume", "session-514"]);
+});
