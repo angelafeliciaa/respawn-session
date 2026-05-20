@@ -106,11 +106,21 @@ respawn https://github.com/org/repo/pull/123
 After `respawn import`, sync saved sessions to matching PRs in a repo:
 
 ```sh
+respawn import internetbackyard/gnomos-app
 respawn link internetbackyard/gnomos-app --dry-run
 respawn link internetbackyard/gnomos-app
 ```
 
 Link matches sessions to PRs by branch name first, then by PR head SHA when available. It only writes PR metadata comments; it does not upload transcripts.
+
+Always run the dry-run first. It prints the exact PRs it would touch:
+
+```sh
+Would link 1 PRs in internetbackyard/gnomos-app; 0 sessions unmatched
+  #514 feat/int-1194-tool-actor-context (1 session)
+```
+
+If the PR you want is not listed, `respawn` does not have enough local evidence to link it automatically yet. The usual cause is an old transcript from a deleted worktree that has not been imported with `respawn import owner/repo`.
 
 ### List Saved Sessions
 
@@ -130,6 +140,14 @@ respawn import
 
 Import scans Claude Code and Codex transcripts, groups them by their recorded cwd, and saves sessions whose cwd is still an available git worktree. It skips transcripts that are already in `~/.respawn/index.json` and skips deleted or non-git worktrees.
 
+If the worktree was deleted, give `respawn` the repo explicitly:
+
+```sh
+respawn import internetbackyard/gnomos-app
+```
+
+For deleted worktrees, `respawn` can still import Claude Code project transcripts when the original cwd contains the repo name and the transcript has embedded branch metadata. Those imported rows use `sha: "unknown"`, but `respawn link` can still match them to PRs by branch.
+
 ## Commands
 
 | Command | What it does |
@@ -139,6 +157,7 @@ Import scans Claude Code and Codex transcripts, groups them by their recorded cw
 | `respawn autosave` | Saves only if the transcript changed |
 | `respawn tag` | Saves and attaches session metadata to the current PR |
 | `respawn import` | Backfills existing local Claude Code and Codex sessions |
+| `respawn import owner/repo` | Backfills deleted-worktree transcripts for a repo when branch metadata exists |
 | `respawn link owner/repo` | Links imported sessions to matching PRs |
 | `respawn link owner/repo --dry-run` | Previews PR links without writing comments |
 | `respawn <branch>` | Restores the newest session for a branch |
@@ -162,7 +181,7 @@ npm install -g respawn-session@latest
 
 `respawn save` detects the active agent in this order:
 
-1. Claude Code via `CLAUDE_SESSION_ID`, then `~/.claude/sessions/*.json`
+1. Claude Code via `CLAUDE_SESSION_ID`, then `~/.claude/sessions/*.json` and `~/.claude/projects/**/*.jsonl`
 2. Codex via `CODEX_TUI_SESSION_LOG_PATH`, `CODEX_SESSION_ID`, or the newest `~/.codex/sessions/**.jsonl` transcript for the current cwd
 
 It then runs:
@@ -180,6 +199,8 @@ The local index lives at:
 ```
 
 Branches can have multiple saved sessions. `respawn <branch>` restores the newest `savedAt` entry for the current repo and branch. `respawn list` shows every saved entry so older sessions remain discoverable.
+
+`respawn import owner/repo` exists for old deleted worktrees. It scans local transcripts whose recorded cwd contains that repo name and imports the ones with embedded branch metadata. This is best-effort recovery for sessions that were created before `respawn` was installed.
 
 `respawn tag` writes a hidden metadata comment to the current PR. The comment stores session pointers, not the transcript body. Transcripts still live in your private gists. This lets `respawn <pr-url|number>` recover the newest tagged session after a branch is merged or deleted.
 

@@ -313,7 +313,15 @@ test("route maps raw argv to commands", () => {
   expect(route(["autosave"]).name).toBe("autosave");
   expect(route(["list"]).name).toBe("list");
   expect(route(["init"]).name).toBe("init");
-  expect(route(["import"]).name).toBe("import");
+  expect(route(["import"])).toEqual({ name: "import", repo: undefined });
+  expect(route(["import", "internetbackyard/gnomos-app"])).toEqual({
+    name: "import",
+    repo: "internetbackyard/gnomos-app",
+  });
+  expect(route(["--repo", "internetbackyard/gnomos-app", "import"])).toEqual({
+    name: "import",
+    repo: "internetbackyard/gnomos-app",
+  });
   expect(route(["tag"]).name).toBe("tag");
   expect(route(["link", "internetbackyard/gnomos-app"])).toEqual({
     name: "link",

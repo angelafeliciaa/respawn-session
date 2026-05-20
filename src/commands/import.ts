@@ -10,6 +10,7 @@ import {
   type SavedSession,
 } from "../index-file";
 import { createGist } from "../storage/gist";
+import { parseGitHubRepo } from "../github";
 
 export type ImportResult = {
   imported: number;
@@ -20,6 +21,7 @@ export type ImportResult = {
 
 export type ImportDeps = {
   indexPath?: string;
+  repo?: string;
   listTranscripts?: typeof listAllTranscripts;
   gitInfoForCwd?: typeof gitInfoForCwd;
   createGist?: typeof createGist;
@@ -38,7 +40,9 @@ export async function importSessions(
   let skipped = 0;
 
   for (const transcript of transcripts) {
-    const info = await gitInfo(transcript.cwd);
+    const info =
+      (await gitInfo(transcript.cwd)) ??
+      fallbackGitInfo(transcript, deps.repo);
     if (!info) {
       skipped += 1;
       continue;
@@ -75,6 +79,29 @@ export async function importSessions(
     skipped,
     message: `Imported ${imported} sessions, skipped ${duplicates} duplicates and ${skipped} unavailable worktrees`,
   };
+}
+
+function fallbackGitInfo(
+  transcript: ImportableTranscript,
+  repo?: string,
+): GitInfo | null {
+  if (!repo || !transcript.branch || !cwdLooksLikeRepo(transcript.cwd, repo)) {
+    return null;
+  }
+  return {
+    repo,
+    branch: transcript.branch,
+    sha: "unknown",
+  };
+}
+
+function cwdLooksLikeRepo(cwd: string, repo: string): boolean {
+  try {
+    const repoName = parseGitHubRepo(repo).name;
+    return cwd.split(/[\\/]/).includes(repoName);
+  } catch {
+    return false;
+  }
 }
 
 async function isDuplicate(

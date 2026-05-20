@@ -1,10 +1,10 @@
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import type { ImportableTranscript, LocatedTranscript, LocateOptions } from "./types";
 
 export function encodeClaudeProjectPath(cwd: string): string {
-  return cwd.replace(/[^A-Za-z0-9._-]/g, "-");
+  return cwd.replace(/[^A-Za-z0-9_-]/g, "-");
 }
 
 export function transcriptPath(
@@ -41,10 +41,11 @@ export function resumeCmd(sessionId: string): string[] {
 
 export function listTranscripts(options: LocateOptions = {}): ImportableTranscript[] {
   const home = options.home ?? homedir();
+  const projectTranscripts = listProjectTranscripts(home);
   const sessionsDir = join(home, ".claude", "sessions");
-  if (!existsSync(sessionsDir)) return [];
+  if (!existsSync(sessionsDir)) return projectTranscripts;
 
-  return readdirSync(sessionsDir, { withFileTypes: true })
+  const registryTranscripts = readdirSync(sessionsDir, { withFileTypes: true })
     .filter((entry) => entry.isFile() && entry.name.endsWith(".json"))
     .map((entry) => readSessionRecord(join(sessionsDir, entry.name)))
     .filter(
@@ -68,6 +69,11 @@ export function listTranscripts(options: LocateOptions = {}): ImportableTranscri
       };
     })
     .filter((transcript): transcript is ImportableTranscript => transcript !== null);
+
+  return uniqueByPath([
+    ...projectTranscripts,
+    ...registryTranscripts,
+  ]);
 }
 
 type ClaudeSessionRecord = {
@@ -75,6 +81,45 @@ type ClaudeSessionRecord = {
   cwd?: string;
   updatedAt?: number;
 };
+
+type ClaudeProjectMeta = {
+  sessionId?: string;
+  cwd?: string;
+  gitBranch?: string;
+  timestamp?: string;
+};
+
+function listProjectTranscripts(home: string): ImportableTranscript[] {
+  const projectsDir = join(home, ".claude", "projects");
+  if (!existsSync(projectsDir)) return [];
+
+  return readdirSync(projectsDir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .flatMap((project) =>
+      readdirSync(join(projectsDir, project.name), { withFileTypes: true })
+        .filter((entry) => entry.isFile() && entry.name.endsWith(".jsonl"))
+        .map((entry) => join(projectsDir, project.name, entry.name)),
+    )
+    .map((path): ImportableTranscript | null => {
+      const meta = readProjectTranscriptMeta(path);
+      const sessionId = meta?.sessionId ?? basename(path, ".jsonl");
+      if (!sessionId || !meta?.cwd) return null;
+      return {
+        agent: "claude" as const,
+        path,
+        sessionId,
+        cwd: meta.cwd,
+        branch:
+          meta.gitBranch && meta.gitBranch !== "HEAD"
+            ? meta.gitBranch
+            : undefined,
+        savedAt: meta.timestamp
+          ? new Date(meta.timestamp).toISOString()
+          : statSync(path).mtime.toISOString(),
+      };
+    })
+    .filter((transcript): transcript is ImportableTranscript => transcript !== null);
+}
 
 function locateFromSessionRegistry(
   options: LocateOptions = {},
@@ -109,4 +154,32 @@ function readSessionRecord(path: string): ClaudeSessionRecord | null {
   } catch {
     return null;
   }
+}
+
+function readProjectTranscriptMeta(path: string): ClaudeProjectMeta | null {
+  try {
+    const lines = readFileSync(path, "utf8").split("\n").slice(0, 100);
+    const meta: ClaudeProjectMeta = {};
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      const parsed = JSON.parse(line) as ClaudeProjectMeta;
+      meta.sessionId ??= parsed.sessionId;
+      meta.cwd ??= parsed.cwd;
+      meta.gitBranch ??= parsed.gitBranch;
+      meta.timestamp ??= parsed.timestamp;
+      if (meta.cwd && meta.sessionId && meta.gitBranch) return meta;
+    }
+    return meta.cwd ? meta : null;
+  } catch {
+    return null;
+  }
+}
+
+function uniqueByPath(transcripts: ImportableTranscript[]): ImportableTranscript[] {
+  const seen = new Set<string>();
+  return transcripts.filter((transcript) => {
+    if (seen.has(transcript.path)) return false;
+    seen.add(transcript.path);
+    return true;
+  });
 }

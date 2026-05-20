@@ -9,6 +9,7 @@ export type LocatedTranscript = {
 
 export type ImportableTranscript = LocatedTranscript & {
   cwd: string;
+  branch?: string;
   savedAt?: string;
 };
 

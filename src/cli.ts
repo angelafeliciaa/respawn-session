@@ -14,7 +14,7 @@ export type Route =
   | { name: "autosave" }
   | { name: "list" }
   | { name: "init" }
-  | { name: "import" }
+  | { name: "import"; repo?: string }
   | { name: "link"; repo: string; dryRun: boolean }
   | { name: "tag" }
   | { name: "version" }
@@ -44,11 +44,16 @@ export function route(args: string[]): Route {
     command === "autosave" ||
     command === "list" ||
     command === "init" ||
-    command === "import" ||
     command === "tag" ||
     command === "update"
   ) {
     return { name: command };
+  }
+  if (command === "import") {
+    return {
+      name: "import",
+      repo: repo ?? rest.slice(1).find((arg) => !arg.startsWith("-")),
+    };
   }
   if (isPrRef(command)) {
     return parsePrRoute(command, repo);
@@ -79,7 +84,7 @@ export async function main(args = Bun.argv.slice(2)): Promise<void> {
     return;
   }
   if (selected.name === "import") {
-    console.log((await importSessions()).message);
+    console.log((await importSessions({ repo: selected.repo })).message);
     return;
   }
   if (selected.name === "link") {
@@ -129,6 +134,7 @@ function helpText(): string {
     "  respawn list",
     "  respawn init",
     "  respawn import",
+    "  respawn import owner/repo",
     "  respawn link owner/repo [--dry-run]",
     "  respawn version",
     "  respawn update",

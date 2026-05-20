@@ -109,6 +109,35 @@ test("importSessions skips duplicate transcript hashes and non-git cwd", async (
   expect(result).toMatchObject({ imported: 0, duplicates: 1, skipped: 1 });
 });
 
+test("importSessions can backfill deleted worktrees for an explicit repo", async () => {
+  const indexPath = join(dir, "index.json");
+  const transcriptPath = join(dir, "orphan.jsonl");
+  await writeFile(transcriptPath, "orphan transcript\n");
+
+  const result = await importSessions({
+    indexPath,
+    repo: "internetbackyard/gnomos-app",
+    listTranscripts: () => [
+      {
+        agent: "claude",
+        path: transcriptPath,
+        sessionId: "orphan-session",
+        cwd: "/Users/angelafelicia/.superset/worktrees/gnomos-app/alpine-trade",
+        branch: "feat/int-1194-tool-actor-context",
+        savedAt: "2026-05-20T05:32:04.192Z",
+      },
+    ],
+    gitInfoForCwd: async () => null,
+    createGist: async () => "gist:orphan",
+  });
+
+  expect(result).toMatchObject({ imported: 1, duplicates: 0, skipped: 0 });
+  const index = await readFile(indexPath, "utf8");
+  expect(index).toContain("internetbackyard/gnomos-app");
+  expect(index).toContain("feat/int-1194-tool-actor-context");
+  expect(index).toContain("unknown");
+});
+
 test("importSessions reports a human summary", async () => {
   const result = await importSessions({
     indexPath: join(dir, "index.json"),

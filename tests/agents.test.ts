@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { mkdtempSync } from "node:fs";
 import {
   encodeClaudeProjectPath,
+  listTranscripts as listClaudeTranscripts,
   locateTranscript as locateClaudeTranscript,
   resumeCmd as claudeResumeCmd,
   transcriptPath as claudeTranscriptPath,
@@ -38,6 +39,11 @@ test("Claude encodes the current working directory in its project path", () => {
   ).toBe(
     "-Users-angelafelicia-Library-Mobile-Documents-com-apple-CloudDocs-VSC-respawn-session",
   );
+  expect(
+    encodeClaudeProjectPath(
+      "/Users/angelafelicia/.superset/worktrees/gnomos-app/alpine-trade",
+    ),
+  ).toBe("-Users-angelafelicia--superset-worktrees-gnomos-app-alpine-trade");
 });
 
 test("Claude locates the active session transcript from CLAUDE_SESSION_ID", async () => {
@@ -93,6 +99,33 @@ test("Claude falls back to the newest session registry entry for the current cwd
       env: {},
     }),
   ).toEqual({ agent: "claude", path, sessionId: newSession });
+});
+
+test("Claude lists project transcripts with embedded branch metadata", async () => {
+  const cwd = "/Users/angelafelicia/.superset/worktrees/gnomos-app/alpine-trade";
+  const sessionId = "65b6cc56-2663-491a-ab61-5d3e03166eee";
+  const path = claudeTranscriptPath(sessionId, { cwd, home });
+  await mkdir(join(path, ".."), { recursive: true });
+  await writeFile(
+    path,
+    `${JSON.stringify({
+      cwd,
+      sessionId,
+      gitBranch: "feat/int-1194-tool-actor-context",
+      timestamp: "2026-05-20T05:32:04.192Z",
+    })}\n`,
+  );
+
+  expect(listClaudeTranscripts({ home })).toEqual([
+    {
+      agent: "claude",
+      path,
+      sessionId,
+      cwd,
+      branch: "feat/int-1194-tool-actor-context",
+      savedAt: "2026-05-20T05:32:04.192Z",
+    },
+  ]);
 });
 
 test("Claude resume command uses claude --resume", () => {
