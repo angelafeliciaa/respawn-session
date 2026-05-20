@@ -1,0 +1,99 @@
+import { afterEach, beforeEach, expect, test } from "bun:test";
+import { mkdir, rm, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { mkdtempSync } from "node:fs";
+import {
+  encodeClaudeProjectPath,
+  locateTranscript as locateClaudeTranscript,
+  resumeCmd as claudeResumeCmd,
+  transcriptPath as claudeTranscriptPath,
+} from "../src/agents/claude";
+import {
+  locateTranscript as locateCodexTranscript,
+  resumeCmd as codexResumeCmd,
+  sessionIdFromCodexPath,
+} from "../src/agents/codex";
+
+let home: string;
+
+beforeEach(() => {
+  home = mkdtempSync(join(tmpdir(), "respawn-agents-"));
+});
+
+afterEach(async () => {
+  await rm(home, { recursive: true, force: true });
+});
+
+test("Claude encodes the current working directory in its project path", () => {
+  expect(
+    encodeClaudeProjectPath(
+      "/Users/angelafelicia/Library/Mobile Documents/project",
+    ),
+  ).toBe("-Users-angelafelicia-Library-Mobile Documents-project");
+});
+
+test("Claude locates the active session transcript from CLAUDE_SESSION_ID", async () => {
+  const cwd = "/Users/angelafelicia/project";
+  const sessionId = "4787a05c-5d85-4b79-a5cd-c76c688e5cf4";
+  const path = claudeTranscriptPath(sessionId, { cwd, home });
+  await mkdir(join(path, ".."), { recursive: true });
+  await writeFile(path, "{}\n");
+
+  expect(
+    locateClaudeTranscript({
+      cwd,
+      home,
+      env: { CLAUDE_SESSION_ID: sessionId },
+    }),
+  ).toEqual({ agent: "claude", path, sessionId });
+});
+
+test("Claude resume command uses claude --resume", () => {
+  expect(claudeResumeCmd("abc")).toEqual(["claude", "--resume", "abc"]);
+});
+
+test("Codex extracts session ids from rollout transcript filenames", () => {
+  expect(
+    sessionIdFromCodexPath(
+      "/Users/a/.codex/sessions/2026/05/20/rollout-2026-05-20T14-02-28-019e4732-6ef7-7532-8a7b-c8f50de309f1.jsonl",
+    ),
+  ).toBe("019e4732-6ef7-7532-8a7b-c8f50de309f1");
+});
+
+test("Codex locates the newest transcript for the current cwd", async () => {
+  const cwd = "/Users/angelafelicia/project";
+  const oldPath = join(
+    home,
+    ".codex/sessions/2026/05/19/rollout-2026-05-19T14-02-28-019e4200-0000-7000-8000-000000000000.jsonl",
+  );
+  const newPath = join(
+    home,
+    ".codex/sessions/2026/05/20/rollout-2026-05-20T14-02-28-019e4732-6ef7-7532-8a7b-c8f50de309f1.jsonl",
+  );
+  await mkdir(join(oldPath, ".."), { recursive: true });
+  await mkdir(join(newPath, ".."), { recursive: true });
+  await writeFile(
+    oldPath,
+    `${JSON.stringify({ type: "session_meta", payload: { id: "old", cwd } })}\n`,
+  );
+  await writeFile(
+    newPath,
+    `${JSON.stringify({
+      type: "session_meta",
+      payload: { id: "019e4732-6ef7-7532-8a7b-c8f50de309f1", cwd },
+    })}\n`,
+  );
+
+  expect(locateCodexTranscript({ cwd, home })).toEqual({
+    agent: "codex",
+    path: newPath,
+    sessionId: "019e4732-6ef7-7532-8a7b-c8f50de309f1",
+    relativePath:
+      "2026/05/20/rollout-2026-05-20T14-02-28-019e4732-6ef7-7532-8a7b-c8f50de309f1.jsonl",
+  });
+});
+
+test("Codex resume command uses codex resume", () => {
+  expect(codexResumeCmd("abc")).toEqual(["codex", "resume", "abc"]);
+});
