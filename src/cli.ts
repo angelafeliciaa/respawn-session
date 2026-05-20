@@ -4,6 +4,7 @@ import { listSessions } from "./commands/list";
 import { resumePrSession, resumeSession } from "./commands/resume";
 import { saveSession } from "./commands/save";
 import { tagCurrentPr } from "./commands/tag";
+import { updateRespawn, versionText } from "./commands/update";
 
 export type Route =
   | { name: "help" }
@@ -12,6 +13,8 @@ export type Route =
   | { name: "list" }
   | { name: "init" }
   | { name: "tag" }
+  | { name: "version" }
+  | { name: "update" }
   | { name: "resume"; branch: string }
   | { name: "resume-pr"; prRef: string };
 
@@ -20,12 +23,16 @@ export function route(args: string[]): Route {
   if (!command || command === "help" || command === "--help" || command === "-h") {
     return { name: "help" };
   }
+  if (command === "version" || command === "--version" || command === "-v") {
+    return { name: "version" };
+  }
   if (
     command === "save" ||
     command === "autosave" ||
     command === "list" ||
     command === "init" ||
-    command === "tag"
+    command === "tag" ||
+    command === "update"
   ) {
     return { name: command };
   }
@@ -61,6 +68,14 @@ export async function main(args = Bun.argv.slice(2)): Promise<void> {
     console.log((await tagCurrentPr()).message);
     return;
   }
+  if (selected.name === "version") {
+    console.log(versionText());
+    return;
+  }
+  if (selected.name === "update") {
+    console.log(await updateRespawn());
+    return;
+  }
 
   const result =
     selected.name === "resume-pr"
@@ -85,6 +100,8 @@ function helpText(): string {
     "  respawn <pr-url|number>",
     "  respawn list",
     "  respawn init",
+    "  respawn version",
+    "  respawn update",
   ].join("\n");
 }
 

@@ -119,6 +119,8 @@ respawn list
 | `respawn <pr-number>` | Restores the newest session from a tagged PR |
 | `respawn <pr-url>` | Restores the newest session from a tagged PR URL |
 | `respawn list` | Lists locally indexed sessions |
+| `respawn version` | Prints the installed CLI version |
+| `respawn update` | Updates the global npm install to the latest release |
 
 ## How It Works
 

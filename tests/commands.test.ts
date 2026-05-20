@@ -7,6 +7,7 @@ import { saveSession } from "../src/commands/save";
 import { resumeSession } from "../src/commands/resume";
 import { listSessions } from "../src/commands/list";
 import { initRespawn } from "../src/commands/init";
+import { updateRespawn, versionText } from "../src/commands/update";
 import { route } from "../src/cli";
 
 let dir: string;
@@ -246,12 +247,50 @@ test("initRespawn preserves existing hooks and does not duplicate autosave", asy
   expect(codexAutosaves).toHaveLength(1);
 });
 
+test("versionText prints the current package version", () => {
+  expect(versionText("1.2.3")).toBe("respawn-session 1.2.3");
+});
+
+test("updateRespawn skips install when already latest", async () => {
+  const calls: string[] = [];
+  const message = await updateRespawn({
+    currentVersion: "0.0.3",
+    run: async (cmd, args) => {
+      calls.push([cmd, ...args].join(" "));
+      return "0.0.3\n";
+    },
+  });
+
+  expect(message).toBe("respawn-session is already up to date at 0.0.3");
+  expect(calls).toEqual(["npm view respawn-session version"]);
+});
+
+test("updateRespawn installs latest when npm has a newer version", async () => {
+  const calls: string[] = [];
+  const message = await updateRespawn({
+    currentVersion: "0.0.3",
+    run: async (cmd, args) => {
+      calls.push([cmd, ...args].join(" "));
+      return args.includes("view") ? "0.0.4\n" : "";
+    },
+  });
+
+  expect(message).toBe("Updated respawn-session 0.0.3 -> 0.0.4");
+  expect(calls).toEqual([
+    "npm view respawn-session version",
+    "npm install -g respawn-session@latest",
+  ]);
+});
+
 test("route maps raw argv to commands", () => {
   expect(route(["save"]).name).toBe("save");
   expect(route(["autosave"]).name).toBe("autosave");
   expect(route(["list"]).name).toBe("list");
   expect(route(["init"]).name).toBe("init");
   expect(route(["tag"]).name).toBe("tag");
+  expect(route(["version"]).name).toBe("version");
+  expect(route(["--version"]).name).toBe("version");
+  expect(route(["update"]).name).toBe("update");
   expect(route(["123"])).toEqual({ name: "resume-pr", prRef: "123" });
   expect(route(["https://github.com/org/repo/pull/123"])).toEqual({
     name: "resume-pr",
