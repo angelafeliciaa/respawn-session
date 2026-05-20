@@ -10,6 +10,7 @@ import {
   upsertRespawnComment,
 } from "../src/github";
 import { linkRepo } from "../src/commands/link";
+import { autosaveSession } from "../src/commands/autosave";
 import { tagCurrentPr } from "../src/commands/tag";
 import { resumePrSession } from "../src/commands/resume";
 import type { RunCommand } from "../src/shell";
@@ -319,6 +320,132 @@ test("tagCurrentPr appends to an existing PR tag", async () => {
     "old-session",
     "new-session",
   ]);
+});
+
+test("autosaveSession tags the current PR with the saved session", async () => {
+  const result = await autosaveSession({
+    saveSession: async () => ({
+      saved: true,
+      message: "Autosaved claude session",
+      session: {
+        repo: "git@github.com:internetbackyard/gnomos-app.git",
+        branch: "feat/int-1194-tool-actor-context",
+        gistUrl: "gist",
+        sessionId: "session-517",
+        sha: "abc123",
+        agent: "claude",
+        savedAt: "2026-05-20T10:00:00.000Z",
+      },
+    }),
+    currentPr: async () => ({
+      number: 517,
+      url: "https://github.com/internetbackyard/gnomos-app/pull/517",
+      headRefName: "feat/int-1194-tool-actor-context",
+    }),
+    getRespawnTag: async () => null,
+    upsertRespawnComment: async ({ tag }) => tag,
+  });
+
+  expect(result.message).toBe(
+    "Autosaved claude session; tagged PR #517 with session session-517",
+  );
+  expect(result.tag?.pr).toBe(517);
+  expect(result.tag?.sessions.map((session) => session.sessionId)).toEqual([
+    "session-517",
+  ]);
+});
+
+test("autosaveSession does not fail when the branch has no PR", async () => {
+  const result = await autosaveSession({
+    saveSession: async () => ({
+      saved: true,
+      message: "Autosaved claude session",
+      session: {
+        repo: "git@github.com:internetbackyard/gnomos-app.git",
+        branch: "scratch",
+        gistUrl: "gist",
+        sessionId: "session-no-pr",
+        sha: "abc123",
+        agent: "claude",
+        savedAt: "2026-05-20T10:00:00.000Z",
+      },
+    }),
+    currentPr: async () => {
+      throw new Error("no pull requests found");
+    },
+    upsertRespawnComment: async () => {
+      throw new Error("no PR should not write comments");
+    },
+  });
+
+  expect(result.message).toBe("Autosaved claude session");
+  expect(result.tag).toBeUndefined();
+});
+
+test("autosaveSession does not duplicate an already tagged session", async () => {
+  const session = {
+    repo: "git@github.com:internetbackyard/gnomos-app.git",
+    branch: "feat/int-1194-tool-actor-context",
+    gistUrl: "gist",
+    sessionId: "session-517",
+    sha: "abc123",
+    agent: "claude" as const,
+    savedAt: "2026-05-20T10:00:00.000Z",
+  };
+
+  const result = await autosaveSession({
+    saveSession: async () => ({
+      saved: false,
+      message: "No transcript changes to autosave for feat/int-1194-tool-actor-context",
+      session,
+    }),
+    currentPr: async () => ({
+      number: 517,
+      url: "https://github.com/internetbackyard/gnomos-app/pull/517",
+      headRefName: "feat/int-1194-tool-actor-context",
+    }),
+    getRespawnTag: async () => ({
+      version: 1,
+      repo: "internetbackyard/gnomos-app",
+      pr: 517,
+      branch: "feat/int-1194-tool-actor-context",
+      sessions: [session],
+    }),
+    upsertRespawnComment: async ({ tag }) => tag,
+  });
+
+  expect(result.tag?.sessions).toHaveLength(1);
+});
+
+test("autosaveSession keeps the saved transcript when PR tagging fails", async () => {
+  const result = await autosaveSession({
+    saveSession: async () => ({
+      saved: true,
+      message: "Autosaved claude session",
+      session: {
+        repo: "git@github.com:internetbackyard/gnomos-app.git",
+        branch: "feat/int-1194-tool-actor-context",
+        gistUrl: "gist",
+        sessionId: "session-517",
+        sha: "abc123",
+        agent: "claude",
+        savedAt: "2026-05-20T10:00:00.000Z",
+      },
+    }),
+    currentPr: async () => ({
+      number: 517,
+      url: "https://github.com/internetbackyard/gnomos-app/pull/517",
+      headRefName: "feat/int-1194-tool-actor-context",
+    }),
+    getRespawnTag: async () => null,
+    upsertRespawnComment: async () => {
+      throw new Error("permission denied");
+    },
+  });
+
+  expect(result.saved).toBe(true);
+  expect(result.message).toBe("Autosaved claude session; PR tag failed: permission denied");
+  expect(result.tag).toBeUndefined();
 });
 
 test("resumePrSession restores the newest session from PR metadata", async () => {

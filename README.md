@@ -25,7 +25,9 @@ Initialize once on each machine. This creates `~/.respawn/index.json` and instal
 respawn init
 ```
 
-Work normally in Claude Code or Codex. `respawn init` makes sessions autosave when the agent stops. To save immediately from inside an active agent session, run:
+Work normally in Claude Code or Codex. `respawn init` makes sessions autosave when the agent stops. If the branch has a GitHub PR, autosave also updates a hidden PR comment so `respawn <pr-number>` works after the worktree or branch is gone.
+
+To save immediately from inside an active agent session, run:
 
 ```sh
 respawn save
@@ -37,7 +39,7 @@ Resume the latest saved session for a branch:
 respawn angela/fix-bugs
 ```
 
-Resume from a PR that was tagged with `respawn tag`:
+Resume from a PR that was autosaved or tagged:
 
 ```sh
 respawn 123
@@ -81,17 +83,23 @@ After that, Claude Code and Codex Stop hooks run:
 respawn autosave
 ```
 
-Autosave hashes the transcript and skips unchanged sessions, so repeated Stop events do not create duplicate gists.
+Autosave hashes the transcript and skips unchanged sessions, so repeated Stop events do not create duplicate gists. When the current branch has a GitHub PR, autosave also writes or updates the hidden respawn PR comment. That is the normal path for:
+
+```sh
+respawn 517
+```
+
+after you delete the worktree.
 
 ### PR Tagging
 
-Use this when you want a session to survive branch deletion after merge:
+Use this when you want to force-save and attach the current session to the current PR manually:
 
 ```sh
 respawn tag
 ```
 
-That writes or updates a hidden metadata comment on the current GitHub PR. The comment stores session pointers, not the transcript body. Transcripts still live in your private gists.
+That writes or updates the same hidden metadata comment on the current GitHub PR. The comment stores session pointers, not the transcript body. Transcripts still live in your private gists.
 
 Later, resume from the PR:
 
@@ -103,7 +111,7 @@ respawn https://github.com/org/repo/pull/123
 
 ### Link Imported Sessions To PRs
 
-After `respawn import`, sync saved sessions to matching PRs in a repo:
+This is for old sessions from before autosave tagged PRs automatically. After `respawn import`, sync saved sessions to matching PRs in a repo:
 
 ```sh
 respawn import internetbackyard/gnomos-app
@@ -154,7 +162,7 @@ For deleted worktrees, `respawn` can still import Claude Code project transcript
 | --- | --- |
 | `respawn init` | Creates the local index and installs autosave hooks |
 | `respawn save` | Saves the active Claude Code or Codex transcript |
-| `respawn autosave` | Saves only if the transcript changed |
+| `respawn autosave` | Saves only if the transcript changed and tags the current PR when one exists |
 | `respawn tag` | Saves and attaches session metadata to the current PR |
 | `respawn import` | Backfills existing local Claude Code and Codex sessions |
 | `respawn import owner/repo` | Backfills deleted-worktree transcripts for a repo when branch metadata exists |
@@ -199,6 +207,8 @@ The local index lives at:
 ```
 
 Branches can have multiple saved sessions. `respawn <branch>` restores the newest `savedAt` entry for the current repo and branch. `respawn list` shows every saved entry so older sessions remain discoverable.
+
+`respawn autosave` is what makes the main workflow work: it saves the transcript and, when `gh pr view` can resolve the current branch's PR, writes the session pointer to that PR. Later `respawn <pr-number>` reads that pointer, restores the transcript, checks out the PR, and resumes the agent.
 
 `respawn import owner/repo` exists for old deleted worktrees. It scans local transcripts whose recorded cwd contains that repo name and imports the ones with embedded branch metadata. This is best-effort recovery for sessions that were created before `respawn` was installed.
 

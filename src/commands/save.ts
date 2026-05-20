@@ -21,11 +21,13 @@ export type SaveDeps = {
   now?: () => Date;
 };
 
-export async function saveSession(deps: SaveDeps = {}): Promise<{
+export type SaveResult = {
   message: string;
   saved: boolean;
   session: SavedSession;
-}> {
+};
+
+export async function saveSession(deps: SaveDeps = {}): Promise<SaveResult> {
   const locate = deps.locateActiveTranscript ?? locateActiveTranscript;
   const transcript = locate();
   if (!transcript) {

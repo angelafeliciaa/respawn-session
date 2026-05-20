@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 import { initRespawn } from "./commands/init";
+import { autosaveSession } from "./commands/autosave";
 import { importSessions } from "./commands/import";
 import { linkRepo } from "./commands/link";
 import { listSessions } from "./commands/list";
@@ -72,7 +73,7 @@ export async function main(args = Bun.argv.slice(2)): Promise<void> {
     return;
   }
   if (selected.name === "autosave") {
-    console.log((await saveSession({ mode: "autosave" })).message);
+    console.log((await autosaveSession()).message);
     return;
   }
   if (selected.name === "list") {
