@@ -4,7 +4,7 @@
 
 # respawn-session
 
-Resume Claude Code and Codex conversations from a branch or PR.
+Resume Claude Code and Codex sessions by branch or PR.
 
 [![npm](https://img.shields.io/npm/v/respawn-session?color=D97757)](https://www.npmjs.com/package/respawn-session)
 [![license](https://img.shields.io/npm/l/respawn-session?color=D97757)](./LICENSE)

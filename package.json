@@ -1,7 +1,7 @@
 {
   "name": "respawn-session",
-  "version": "0.0.13",
-  "description": "Local-first CLI to save and resume Claude Code and Codex sessions by branch or PR.",
+  "version": "0.0.14",
+  "description": "Resume Claude Code and Codex sessions by branch or PR.",
   "type": "module",
   "bin": {
     "respawn": "./src/cli.ts"
