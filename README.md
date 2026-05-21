@@ -1,27 +1,32 @@
-<div align="center">
+<h1 align="center">
+  <img src="docs/respawn-icon.svg" alt="respawn-session logo" width="80" height="80" /><br/>
+  respawn-session
+</h1>
 
-<img width="200" height="200" alt="image" src="https://github.com/user-attachments/assets/568c3d4f-8382-4b58-b765-c106b131e2c8" />
+<p align="center">
+  <strong>Pick up where your agent left off &mdash; on any branch, any PR.</strong><br/>
+  Resume Claude Code and Codex sessions long after the worktree is gone.
+</p>
 
+<p align="center">
+  <a href="https://www.npmjs.com/package/respawn-session"><img src="https://img.shields.io/npm/v/respawn-session?color=D97757" alt="npm" /></a>
+  <a href="./LICENSE"><img src="https://img.shields.io/npm/l/respawn-session?color=D97757" alt="license" /></a>
+  <a href="#local-only"><img src="https://img.shields.io/badge/storage-local--only-D97757" alt="local-first" /></a>
+</p>
 
-# respawn-session
-
-Resume Claude Code and Codex sessions by branch or PR.
-
-[![npm](https://img.shields.io/npm/v/respawn-session?color=D97757)](https://www.npmjs.com/package/respawn-session)
-[![license](https://img.shields.io/npm/l/respawn-session?color=D97757)](./LICENSE)
-[![local-first](https://img.shields.io/badge/storage-local--only-D97757)](#local-only)
-
-</div>
-
-`respawn` lets you delete old worktrees without losing the Claude Code or Codex session attached to them.
-
-It saves transcripts locally, indexes them by branch or PR, and restores the right session when you run `respawn <branch>` or `respawn <pr-number>`.
+`respawn` saves your agent transcripts locally, indexes them by branch or PR, and restores the right one when you run `respawn <branch>` or `respawn <pr-number>`. Delete worktrees, switch machines, come back to a merged PR weeks later &mdash; the conversation comes back with it.
 
 ## Install
 
 ```sh
 npm install -g respawn-session
 respawn init
+```
+
+Or try it without installing:
+
+```sh
+npx respawn-session init
 ```
 
 Requires Bun 1.0+. GitHub CLI is only needed for PR resume, such as `respawn 517`.
