@@ -13,15 +13,11 @@ Resume Claude Code and Codex sessions by branch or PR.
 
 </div>
 
-`respawn` saves the transcript behind an agent session, ties it to your git branch or PR, and restores it later so the same agent can pick up the old conversation.
+`respawn` lets you delete old worktrees without losing the Claude Code or Codex session attached to them.
+
+It saves transcripts locally, indexes them by branch or PR, and restores the right session when you run `respawn <branch>` or `respawn <pr-number>`.
 
 No hosted service. No telemetry. No transcript uploads.
-
-## Why
-
-AI coding agents are stateless. The transcript is the session.
-
-If you delete a worktree, move machines, or come back to a merged PR weeks later, the diff is still there but the conversation that produced it is not. `respawn` keeps that context recoverable without keeping dead worktrees around.
 
 ## Install
 
