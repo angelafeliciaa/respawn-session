@@ -32,7 +32,7 @@ test("recordSession appends multiple sessions for the same repo and branch", asy
   await recordSession(path, {
     repo: "git@github.com:angelafeliciaa/respawn-session.git",
     branch: "angela/fix-bugs",
-    gistUrl: "https://gist.github.com/a/111",
+    transcriptPath: "/home/.respawn/transcripts/111.jsonl",
     sessionId: "session-1",
     sha: "abc123",
     agent: "claude",
@@ -41,7 +41,7 @@ test("recordSession appends multiple sessions for the same repo and branch", asy
   await recordSession(path, {
     repo: "git@github.com:angelafeliciaa/respawn-session.git",
     branch: "angela/fix-bugs",
-    gistUrl: "https://gist.github.com/a/222",
+    transcriptPath: "/home/.respawn/transcripts/222.jsonl",
     sessionId: "session-2",
     sha: "def456",
     agent: "codex",
@@ -65,7 +65,7 @@ test("findLatestSession returns the newest saved session for a branch", async ()
   await recordSession(path, {
     repo: "repo",
     branch: "main",
-    gistUrl: "old",
+    transcriptPath: "old",
     sessionId: "old-session",
     sha: "abc123",
     agent: "claude",
@@ -74,7 +74,7 @@ test("findLatestSession returns the newest saved session for a branch", async ()
   await recordSession(path, {
     repo: "repo",
     branch: "main",
-    gistUrl: "new",
+    transcriptPath: "new",
     sessionId: "new-session",
     sha: "def456",
     agent: "claude",

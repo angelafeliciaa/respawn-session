@@ -7,11 +7,14 @@ export type AgentName = "claude" | "codex";
 export type SavedSession = {
   repo: string;
   branch: string;
-  gistUrl: string;
+  transcriptPath?: string;
+  gistUrl?: string;
   sessionId: string;
   sha: string;
   agent: AgentName;
   savedAt: string;
+  pr?: number;
+  prUrl?: string;
   relativePath?: string;
   transcriptHash?: string;
 };
@@ -24,6 +27,11 @@ export type RespawnIndex = {
 export type SessionQuery = {
   repo: string;
   branch: string;
+};
+
+export type PrSessionQuery = {
+  repo: string;
+  pr: number;
 };
 
 export function defaultIndexPath(home = homedir()): string {
@@ -80,4 +88,26 @@ export async function findLatestSession(
 ): Promise<SavedSession | null> {
   const sessions = await findSessions(path, query);
   return [...sessions].sort((a, b) => a.savedAt.localeCompare(b.savedAt)).at(-1) ?? null;
+}
+
+export async function findLatestPrSession(
+  path: string,
+  query: PrSessionQuery,
+): Promise<SavedSession | null> {
+  const index = await readIndex(path);
+  return (
+    index.sessions
+      .filter((session) => session.repo === query.repo && session.pr === query.pr)
+      .sort((a, b) => a.savedAt.localeCompare(b.savedAt))
+      .at(-1) ?? null
+  );
+}
+
+export async function updateSessions(
+  path: string,
+  update: (session: SavedSession) => SavedSession,
+): Promise<void> {
+  const index = await readIndex(path);
+  index.sessions = index.sessions.map(update);
+  await writeIndex(path, index);
 }

@@ -14,7 +14,8 @@ export async function listSessions(deps: ListDeps = {}): Promise<string> {
         `${session.repo}@${session.branch}`,
         session.sessionId,
         session.sha,
-        session.gistUrl,
+        session.pr ? `#${session.pr}` : "-",
+        session.transcriptPath ?? "(missing local transcript)",
       ].join(" "),
     )
     .join("\n");

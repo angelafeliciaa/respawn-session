@@ -27,6 +27,17 @@ export async function checkoutBranch(
   await run("git", ["checkout", branch]);
 }
 
+export async function checkoutSavedCommit(
+  branch: string,
+  sha: string,
+  run: RunCommand = runCommand,
+): Promise<void> {
+  if (!sha || sha === "unknown") {
+    throw new Error("Saved session does not have a usable git commit SHA");
+  }
+  await run("git", ["checkout", "-B", branch, sha]);
+}
+
 export async function gitInfoForCwd(
   cwd: string,
   run: RunCommand = runCommand,

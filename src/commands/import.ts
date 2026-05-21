@@ -9,7 +9,7 @@ import {
   recordSession,
   type SavedSession,
 } from "../index-file";
-import { createGist } from "../storage/gist";
+import { saveTranscript } from "../storage/local";
 import { parseGitHubRepo } from "../github";
 
 export type ImportResult = {
@@ -24,7 +24,7 @@ export type ImportDeps = {
   repo?: string;
   listTranscripts?: typeof listAllTranscripts;
   gitInfoForCwd?: typeof gitInfoForCwd;
-  createGist?: typeof createGist;
+  saveTranscript?: typeof saveTranscript;
   now?: () => Date;
 };
 
@@ -34,7 +34,7 @@ export async function importSessions(
   const indexPath = deps.indexPath ?? defaultIndexPath();
   const transcripts = (deps.listTranscripts ?? listAllTranscripts)();
   const gitInfo = deps.gitInfoForCwd ?? gitInfoForCwd;
-  const upload = deps.createGist ?? createGist;
+  const store = deps.saveTranscript ?? saveTranscript;
   let imported = 0;
   let duplicates = 0;
   let skipped = 0;
@@ -54,14 +54,11 @@ export async function importSessions(
       continue;
     }
 
-    const gistUrl = await upload(
-      transcript.path,
-      `respawn: ${info.repo}@${info.branch}`,
-    );
+    const transcriptPath = await store(transcript.path);
     const session: SavedSession = {
       repo: info.repo,
       branch: info.branch,
-      gistUrl,
+      transcriptPath,
       sessionId: transcript.sessionId,
       sha: info.sha,
       agent: transcript.agent,

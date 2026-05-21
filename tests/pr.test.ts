@@ -3,11 +3,8 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import {
-  decodeRespawnComment,
-  encodeRespawnComment,
   listPullRequests,
   parseGitHubRepo,
-  upsertRespawnComment,
 } from "../src/github";
 import { linkRepo } from "../src/commands/link";
 import { autosaveSession } from "../src/commands/autosave";
@@ -34,72 +31,6 @@ test("parseGitHubRepo supports ssh and https remotes", () => {
     owner: "org",
     name: "repo",
   });
-});
-
-test("respawn PR comments round-trip hidden metadata", () => {
-  const body = encodeRespawnComment({
-    version: 1,
-    repo: "repo",
-    pr: 123,
-    branch: "angela/fix-bugs",
-    sessions: [
-      {
-        repo: "repo",
-        branch: "angela/fix-bugs",
-        gistUrl: "gist",
-        sessionId: "session-1",
-        sha: "abc123",
-        agent: "codex",
-        savedAt: "2026-05-20T10:00:00.000Z",
-      },
-    ],
-  });
-
-  expect(decodeRespawnComment(body)?.sessions[0].sessionId).toBe("session-1");
-});
-
-test("upsertRespawnComment patches an existing hidden comment", async () => {
-  const calls: string[] = [];
-  const run: RunCommand = async (cmd, args) => {
-    calls.push([cmd, ...args].join(" "));
-    if (args.includes("view")) {
-      return JSON.stringify({
-        comments: [
-          {
-            id: "IC_kw",
-            body: encodeRespawnComment({
-              version: 1,
-              repo: "repo",
-              pr: 123,
-              branch: "old",
-              sessions: [],
-            }),
-          },
-        ],
-      });
-    }
-    return "";
-  };
-
-  await upsertRespawnComment(
-    {
-      owner: "angelafeliciaa",
-      name: "respawn-session",
-      pr: 123,
-      tag: {
-        version: 1,
-        repo: "repo",
-        pr: 123,
-        branch: "angela/fix-bugs",
-        sessions: [],
-      },
-    },
-    run,
-  );
-
-  expect(calls.at(-1)).toStartWith(
-    "gh api repos/angelafeliciaa/respawn-session/issues/comments/IC_kw -X PATCH -f body=",
-  );
 });
 
 test("listPullRequests reads all PRs for an explicit repo", async () => {
@@ -143,7 +74,7 @@ test("linkRepo links sessions to PRs by branch and head sha", async () => {
         {
           repo: "https://github.com/internetbackyard/gnomos-app",
           branch: "feat/int-1194-tool-actor-context",
-          gistUrl: "gist-branch",
+          transcriptPath: "local-branch",
           sessionId: "branch-session",
           sha: "branchsha",
           agent: "codex",
@@ -152,7 +83,7 @@ test("linkRepo links sessions to PRs by branch and head sha", async () => {
         {
           repo: "git@github.com:internetbackyard/gnomos-app.git",
           branch: "staging",
-          gistUrl: "gist-head",
+          transcriptPath: "local-head",
           sessionId: "head-session",
           sha: "headsha",
           agent: "codex",
@@ -161,7 +92,7 @@ test("linkRepo links sessions to PRs by branch and head sha", async () => {
         {
           repo: "git@github.com:other/repo.git",
           branch: "feat/int-1194-tool-actor-context",
-          gistUrl: "other",
+          transcriptPath: "other",
           sessionId: "other-session",
           sha: "othersha",
           agent: "codex",
@@ -170,8 +101,6 @@ test("linkRepo links sessions to PRs by branch and head sha", async () => {
       ],
     }),
   );
-  const linked: number[] = [];
-
   const result = await linkRepo("internetbackyard/gnomos-app", {
     indexPath,
     listPullRequests: async () => [
@@ -184,21 +113,20 @@ test("linkRepo links sessions to PRs by branch and head sha", async () => {
         title: "actor context",
       },
     ],
-    upsertRespawnComment: async ({ tag }) => {
-      linked.push(tag.pr);
-      expect(tag.sessions.map((session) => session.sessionId).sort()).toEqual([
-        "branch-session",
-        "head-session",
-      ]);
-      return tag;
-    },
   });
 
   expect(result).toMatchObject({ linked: 1, dryRun: false, unmatchedSessions: 0 });
-  expect(linked).toEqual([514]);
+  const updated = JSON.parse(await readFile(indexPath, "utf8")) as {
+    sessions: Array<{ sessionId: string; pr?: number }>;
+  };
+  expect(
+    updated.sessions
+      .filter((session) => ["branch-session", "head-session"].includes(session.sessionId))
+      .map((session) => session.pr),
+  ).toEqual([514, 514]);
 });
 
-test("linkRepo dry-run reports matches without writing comments", async () => {
+test("linkRepo dry-run reports matches without writing local metadata", async () => {
   const indexPath = join(dir, "index.json");
   await writeFile(
     indexPath,
@@ -208,7 +136,7 @@ test("linkRepo dry-run reports matches without writing comments", async () => {
         {
           repo: "internetbackyard/gnomos-app",
           branch: "feature",
-          gistUrl: "gist",
+          transcriptPath: "local",
           sessionId: "session",
           sha: "sha",
           agent: "codex",
@@ -231,9 +159,6 @@ test("linkRepo dry-run reports matches without writing comments", async () => {
         commits: [],
       },
     ],
-    upsertRespawnComment: async () => {
-      throw new Error("dry-run should not write comments");
-    },
   });
 
   expect(result.message).toBe(
@@ -244,85 +169,76 @@ test("linkRepo dry-run reports matches without writing comments", async () => {
   );
 });
 
-test("tagCurrentPr saves the session and upserts PR metadata", async () => {
+test("tagCurrentPr saves the session with local PR metadata", async () => {
   const transcriptPath = join(dir, "session.jsonl");
   await writeFile(transcriptPath, "transcript\n");
 
   const result = await tagCurrentPr({
-    saveSession: async () => ({
+    saveSession: async (deps = {}) => {
+      expect(deps.sessionPatch).toEqual({
+        pr: 123,
+        prUrl: "https://github.com/angelafeliciaa/respawn-session/pull/123",
+      });
+      return {
       saved: true,
       message: "Saved codex session",
       session: {
         repo: "git@github.com:angelafeliciaa/respawn-session.git",
         branch: "angela/fix-bugs",
-        gistUrl: "gist",
+        transcriptPath: "local",
         sessionId: "session-1",
         sha: "abc123",
         agent: "codex",
         savedAt: "2026-05-20T10:00:00.000Z",
         relativePath: "2026/05/20/session.jsonl",
+        pr: 123,
+        prUrl: "https://github.com/angelafeliciaa/respawn-session/pull/123",
       },
-    }),
+    }},
     currentPr: async () => ({
       number: 123,
       url: "https://github.com/angelafeliciaa/respawn-session/pull/123",
       headRefName: "angela/fix-bugs",
     }),
-    getRespawnTag: async () => null,
-    upsertRespawnComment: async ({ tag }) => tag,
   });
 
   expect(result.tag.pr).toBe(123);
-  expect(result.tag.sessions[0].sessionId).toBe("session-1");
+  expect(result.tag.session.sessionId).toBe("session-1");
 });
 
-test("tagCurrentPr appends to an existing PR tag", async () => {
+test("tagCurrentPr stores PR metadata locally on the saved session", async () => {
   const result = await tagCurrentPr({
-    saveSession: async () => ({
+    saveSession: async (deps = {}) => {
+      expect(deps.sessionPatch).toEqual({
+        pr: 123,
+        prUrl: "https://github.com/angelafeliciaa/respawn-session/pull/123",
+      });
+      return {
       saved: true,
       message: "Saved codex session",
       session: {
         repo: "git@github.com:angelafeliciaa/respawn-session.git",
         branch: "angela/fix-bugs",
-        gistUrl: "new",
+        transcriptPath: "new",
         sessionId: "new-session",
         sha: "newsha",
         agent: "codex",
         savedAt: "2026-05-20T11:00:00.000Z",
+        pr: 123,
+        prUrl: "https://github.com/angelafeliciaa/respawn-session/pull/123",
       },
-    }),
+    }},
     currentPr: async () => ({
       number: 123,
       url: "https://github.com/angelafeliciaa/respawn-session/pull/123",
       headRefName: "angela/fix-bugs",
     }),
-    getRespawnTag: async () => ({
-      version: 1,
-      repo: "git@github.com:angelafeliciaa/respawn-session.git",
-      pr: 123,
-      branch: "angela/fix-bugs",
-      sessions: [
-        {
-          repo: "git@github.com:angelafeliciaa/respawn-session.git",
-          branch: "angela/fix-bugs",
-          gistUrl: "old",
-          sessionId: "old-session",
-          sha: "oldsha",
-          agent: "claude",
-          savedAt: "2026-05-20T10:00:00.000Z",
-        },
-      ],
-    }),
-    upsertRespawnComment: async ({ tag }) => tag,
   });
 
-  expect(result.tag.sessions.map((session) => session.sessionId)).toEqual([
-    "old-session",
-    "new-session",
-  ]);
+  expect(result.tag.session.sessionId).toBe("new-session");
 });
 
-test("autosaveSession tags the current PR with the saved session", async () => {
+test("autosaveSession links the current PR with the saved session locally", async () => {
   const result = await autosaveSession({
     saveSession: async () => ({
       saved: true,
@@ -330,7 +246,7 @@ test("autosaveSession tags the current PR with the saved session", async () => {
       session: {
         repo: "git@github.com:internetbackyard/gnomos-app.git",
         branch: "feat/int-1194-tool-actor-context",
-        gistUrl: "gist",
+        transcriptPath: "local",
         sessionId: "session-517",
         sha: "abc123",
         agent: "claude",
@@ -342,17 +258,12 @@ test("autosaveSession tags the current PR with the saved session", async () => {
       url: "https://github.com/internetbackyard/gnomos-app/pull/517",
       headRefName: "feat/int-1194-tool-actor-context",
     }),
-    getRespawnTag: async () => null,
-    upsertRespawnComment: async ({ tag }) => tag,
   });
 
   expect(result.message).toBe(
-    "Autosaved claude session; tagged PR #517 with session session-517",
+    "Autosaved claude session; linked local PR #517",
   );
-  expect(result.tag?.pr).toBe(517);
-  expect(result.tag?.sessions.map((session) => session.sessionId)).toEqual([
-    "session-517",
-  ]);
+  expect(result.pr).toBe(517);
 });
 
 test("autosaveSession does not fail when the branch has no PR", async () => {
@@ -363,7 +274,7 @@ test("autosaveSession does not fail when the branch has no PR", async () => {
       session: {
         repo: "git@github.com:internetbackyard/gnomos-app.git",
         branch: "scratch",
-        gistUrl: "gist",
+        transcriptPath: "local",
         sessionId: "session-no-pr",
         sha: "abc123",
         agent: "claude",
@@ -373,20 +284,17 @@ test("autosaveSession does not fail when the branch has no PR", async () => {
     currentPr: async () => {
       throw new Error("no pull requests found");
     },
-    upsertRespawnComment: async () => {
-      throw new Error("no PR should not write comments");
-    },
   });
 
   expect(result.message).toBe("Autosaved claude session");
-  expect(result.tag).toBeUndefined();
+  expect(result.pr).toBeUndefined();
 });
 
-test("autosaveSession does not duplicate an already tagged session", async () => {
+test("autosaveSession passes PR metadata into the local save", async () => {
   const session = {
     repo: "git@github.com:internetbackyard/gnomos-app.git",
     branch: "feat/int-1194-tool-actor-context",
-    gistUrl: "gist",
+    transcriptPath: "local",
     sessionId: "session-517",
     sha: "abc123",
     agent: "claude" as const,
@@ -394,30 +302,27 @@ test("autosaveSession does not duplicate an already tagged session", async () =>
   };
 
   const result = await autosaveSession({
-    saveSession: async () => ({
+    saveSession: async (deps = {}) => {
+      expect(deps.sessionPatch).toEqual({
+        pr: 517,
+        prUrl: "https://github.com/internetbackyard/gnomos-app/pull/517",
+      });
+      return {
       saved: false,
       message: "No transcript changes to autosave for feat/int-1194-tool-actor-context",
       session,
-    }),
+    }},
     currentPr: async () => ({
       number: 517,
       url: "https://github.com/internetbackyard/gnomos-app/pull/517",
       headRefName: "feat/int-1194-tool-actor-context",
     }),
-    getRespawnTag: async () => ({
-      version: 1,
-      repo: "internetbackyard/gnomos-app",
-      pr: 517,
-      branch: "feat/int-1194-tool-actor-context",
-      sessions: [session],
-    }),
-    upsertRespawnComment: async ({ tag }) => tag,
   });
 
-  expect(result.tag?.sessions).toHaveLength(1);
+  expect(result.pr).toBe(517);
 });
 
-test("autosaveSession keeps the saved transcript when PR tagging fails", async () => {
+test("autosaveSession keeps saving when PR detection fails", async () => {
   const result = await autosaveSession({
     saveSession: async () => ({
       saved: true,
@@ -425,63 +330,61 @@ test("autosaveSession keeps the saved transcript when PR tagging fails", async (
       session: {
         repo: "git@github.com:internetbackyard/gnomos-app.git",
         branch: "feat/int-1194-tool-actor-context",
-        gistUrl: "gist",
+        transcriptPath: "local",
         sessionId: "session-517",
         sha: "abc123",
         agent: "claude",
         savedAt: "2026-05-20T10:00:00.000Z",
       },
     }),
-    currentPr: async () => ({
-      number: 517,
-      url: "https://github.com/internetbackyard/gnomos-app/pull/517",
-      headRefName: "feat/int-1194-tool-actor-context",
-    }),
-    getRespawnTag: async () => null,
-    upsertRespawnComment: async () => {
-      throw new Error("permission denied");
+    currentPr: async () => {
+      throw new Error("no PR");
     },
   });
 
   expect(result.saved).toBe(true);
-  expect(result.message).toBe("Autosaved claude session; PR tag failed: permission denied");
-  expect(result.tag).toBeUndefined();
+  expect(result.message).toBe("Autosaved claude session");
+  expect(result.pr).toBeUndefined();
 });
 
 test("resumePrSession restores the newest session from PR metadata", async () => {
+  const indexPath = join(dir, "index.json");
   const restoredPath = join(dir, "home/.codex/sessions/2026/05/20/session.jsonl");
   const checkouts: string[] = [];
-  const result = await resumePrSession("123", {
-    currentRepo: async () => "repo",
-    getRespawnTag: async () => ({
+  await writeFile(
+    indexPath,
+    JSON.stringify({
       version: 1,
-      repo: "repo",
-      pr: 123,
-      branch: "angela/fix-bugs",
       sessions: [
         {
           repo: "repo",
           branch: "angela/fix-bugs",
-          gistUrl: "old",
+          transcriptPath: "old",
           sessionId: "old-session",
           sha: "oldsha",
           agent: "codex",
           savedAt: "2026-05-20T09:00:00.000Z",
           relativePath: "2026/05/20/old.jsonl",
+          pr: 123,
         },
         {
           repo: "repo",
           branch: "angela/fix-bugs",
-          gistUrl: "new",
+          transcriptPath: "new",
           sessionId: "new-session",
           sha: "newsha",
           agent: "codex",
           savedAt: "2026-05-20T11:00:00.000Z",
           relativePath: "2026/05/20/session.jsonl",
+          pr: 123,
         },
       ],
     }),
-    downloadGist: async (gistUrl) => `downloaded:${gistUrl}\n`,
+  );
+  const result = await resumePrSession("123", {
+    indexPath,
+    currentRepo: async () => "repo",
+    readTranscript: async (path) => `downloaded:${path}\n`,
     checkoutPr: async (prRef) => {
       checkouts.push(prRef);
     },
@@ -494,35 +397,76 @@ test("resumePrSession restores the newest session from PR metadata", async () =>
 });
 
 test("resumePrSession supports an explicit repo", async () => {
+  const indexPath = join(dir, "index.json");
   const restoredPath = join(dir, "home/.codex/sessions/2026/05/20/session.jsonl");
+  await writeFile(
+    indexPath,
+    JSON.stringify({
+      version: 1,
+      sessions: [
+        {
+          repo: "https://github.com/internetbackyard/gnomos-app",
+          branch: "staging",
+          transcriptPath: "local",
+          sessionId: "session-514",
+          sha: "abc123",
+          agent: "codex",
+          savedAt: "2026-05-20T11:00:00.000Z",
+          relativePath: "2026/05/20/session.jsonl",
+          pr: 514,
+        },
+      ],
+    }),
+  );
   const result = await resumePrSession("514", {
+    indexPath,
     repo: "internetbackyard/gnomos-app",
-    getRespawnTag: async (prRef, repo) => {
-      expect(prRef).toBe("514");
-      expect(repo).toBe("internetbackyard/gnomos-app");
-      return {
-        version: 1,
-        repo: "https://github.com/internetbackyard/gnomos-app",
-        pr: 514,
-        branch: "staging",
-        sessions: [
-          {
-            repo: "https://github.com/internetbackyard/gnomos-app",
-            branch: "staging",
-            gistUrl: "gist",
-            sessionId: "session-514",
-            sha: "abc123",
-            agent: "codex",
-            savedAt: "2026-05-20T11:00:00.000Z",
-            relativePath: "2026/05/20/session.jsonl",
-          },
-        ],
-      };
-    },
-    downloadGist: async () => "downloaded\n",
+    readTranscript: async () => "downloaded\n",
     checkoutPr: async () => {},
     targetTranscriptPath: () => restoredPath,
   });
 
   expect(result.command).toEqual(["codex", "resume", "session-514"]);
+});
+
+test("resumePrSession falls back to a local branch at the saved commit", async () => {
+  const indexPath = join(dir, "index.json");
+  const restoredPath = join(dir, "home/.codex/sessions/2026/05/20/session.jsonl");
+  const fallbacks: Array<{ branch: string; sha: string }> = [];
+  await writeFile(
+    indexPath,
+    JSON.stringify({
+      version: 1,
+      sessions: [
+        {
+          repo: "repo",
+          branch: "deleted-branch",
+          transcriptPath: "local",
+          sessionId: "session-517",
+          sha: "savedsha",
+          agent: "codex",
+          savedAt: "2026-05-20T11:00:00.000Z",
+          relativePath: "2026/05/20/session.jsonl",
+          pr: 517,
+        },
+      ],
+    }),
+  );
+
+  const result = await resumePrSession("517", {
+    indexPath,
+    currentRepo: async () => "repo",
+    readTranscript: async () => "downloaded\n",
+    checkoutPr: async () => {
+      throw new Error("branch was deleted");
+    },
+    checkoutSavedCommit: async (branch, sha) => {
+      fallbacks.push({ branch, sha });
+    },
+    targetTranscriptPath: () => restoredPath,
+  });
+
+  expect(await readFile(restoredPath, "utf8")).toBe("downloaded\n");
+  expect(fallbacks).toEqual([{ branch: "respawn/pr-517", sha: "savedsha" }]);
+  expect(result.command).toEqual(["codex", "resume", "session-517"]);
 });

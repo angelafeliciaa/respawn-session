@@ -6,9 +6,10 @@ import {
   defaultIndexPath,
   readIndex,
   recordSession,
+  updateSessions,
   type SavedSession,
 } from "../index-file";
-import { createGist } from "../storage/gist";
+import { saveTranscript } from "../storage/local";
 
 export type SaveDeps = {
   indexPath?: string;
@@ -17,7 +18,8 @@ export type SaveDeps = {
   currentRepo?: typeof currentRepo;
   currentBranch?: typeof currentBranch;
   currentSha?: typeof currentSha;
-  createGist?: typeof createGist;
+  saveTranscript?: typeof saveTranscript;
+  sessionPatch?: Partial<Pick<SavedSession, "pr" | "prUrl">>;
   now?: () => Date;
 };
 
@@ -44,47 +46,39 @@ export async function saveSession(deps: SaveDeps = {}): Promise<SaveResult> {
 
   if (deps.mode === "autosave") {
     const index = await readIndex(indexPath);
-    const unchanged = index.sessions.some(
-      (session) =>
-        session.repo === repo &&
-        session.branch === branch &&
-        session.agent === transcript.agent &&
-        session.sessionId === transcript.sessionId &&
-        session.transcriptHash === transcriptHash,
-    );
+    const unchanged = [...index.sessions]
+      .reverse()
+      .find(
+        (session) =>
+          session.repo === repo &&
+          session.branch === branch &&
+          session.agent === transcript.agent &&
+          session.sessionId === transcript.sessionId &&
+          session.transcriptHash === transcriptHash,
+      );
     if (unchanged) {
+      const session = await applySessionPatch(indexPath, unchanged, deps.sessionPatch);
       return {
         message: `No transcript changes to autosave for ${branch}`,
         saved: false,
-        session: [...index.sessions]
-          .reverse()
-          .find(
-            (session) =>
-              session.repo === repo &&
-              session.branch === branch &&
-              session.agent === transcript.agent &&
-              session.sessionId === transcript.sessionId &&
-              session.transcriptHash === transcriptHash,
-          )!,
+        session,
       };
     }
   }
 
-  const gistUrl = await (deps.createGist ?? createGist)(
-    transcript.path,
-    `respawn: ${repo}@${branch}`,
-  );
+  const transcriptPath = await (deps.saveTranscript ?? saveTranscript)(transcript.path);
 
   const session: SavedSession = {
     repo,
     branch,
-    gistUrl,
+    transcriptPath,
     sessionId: transcript.sessionId,
     sha,
     agent: transcript.agent,
     savedAt: (deps.now ?? (() => new Date()))().toISOString(),
     relativePath: transcript.relativePath,
     transcriptHash,
+    ...deps.sessionPatch,
   };
 
   await recordSession(indexPath, session);
@@ -97,4 +91,28 @@ export async function saveSession(deps: SaveDeps = {}): Promise<SaveResult> {
 
 async function hashFile(path: string): Promise<string> {
   return createHash("sha256").update(await readFile(path)).digest("hex");
+}
+
+async function applySessionPatch(
+  indexPath: string,
+  session: SavedSession,
+  patch?: Partial<Pick<SavedSession, "pr" | "prUrl">>,
+): Promise<SavedSession> {
+  if (!patch || Object.keys(patch).length === 0) return session;
+  const patched = { ...session, ...patch };
+  await updateSessions(indexPath, (candidate) =>
+    sameSavedSession(candidate, session) ? patched : candidate,
+  );
+  return patched;
+}
+
+function sameSavedSession(a: SavedSession, b: SavedSession): boolean {
+  return (
+    a.repo === b.repo &&
+    a.branch === b.branch &&
+    a.agent === b.agent &&
+    a.sessionId === b.sessionId &&
+    a.savedAt === b.savedAt &&
+    a.transcriptHash === b.transcriptHash
+  );
 }

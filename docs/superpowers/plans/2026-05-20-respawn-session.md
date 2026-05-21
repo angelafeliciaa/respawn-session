@@ -2,9 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build the v0.1 `respawn` CLI that saves Claude Code and Codex transcripts to private GitHub gists and resumes the latest session for a branch.
+**Status:** Superseded by the local-only storage design. Do not implement remote transcript storage from this plan.
 
-**Architecture:** The CLI uses small TypeScript modules with direct Bun APIs and shell calls. Agent adapters locate transcripts and produce resume commands; command modules coordinate git metadata, gist storage, and the local `~/.respawn/index.json` file.
+**Goal:** Build the v0.1 `respawn` CLI that saves Claude Code and Codex transcripts to local disk and resumes the latest session for a branch or PR.
+
+**Architecture:** The CLI uses small TypeScript modules with direct Bun APIs and shell calls. Agent adapters locate transcripts and produce resume commands; command modules coordinate git metadata, local transcript copies, and the local `~/.respawn/index.json` file.
 
 **Tech Stack:** Bun, TypeScript, Bun test, `gh` CLI, local filesystem, `git` CLI.
 
@@ -38,18 +40,18 @@
 - [ ] Run `bun test tests/agents.test.ts`; expect all tests to pass.
 - [ ] Commit with `feat(agents): locate claude and codex sessions`.
 
-### Task 3: Git And Gist Plumbing
+### Task 3: Git And Local Transcript Plumbing
 
 **Files:**
 - Create: `src/git.ts`
-- Create: `src/storage/gist.ts`
-- Test: `tests/git-gist.test.ts`
+- Create: `src/storage/local.ts`
+- Test: `tests/git-local.test.ts`
 
-- [ ] Write failing tests for git command parsing and gist id extraction from URLs.
-- [ ] Run `bun test tests/git-gist.test.ts`; expect missing-module failure.
-- [ ] Implement shell helpers, `currentRepo`, `currentBranch`, `currentSha`, `createGist`, and `downloadGist`.
-- [ ] Run `bun test tests/git-gist.test.ts`; expect all tests to pass.
-- [ ] Commit with `feat(storage): add git and gist plumbing`.
+- [ ] Write failing tests for git command parsing and local transcript copy/restore.
+- [ ] Run `bun test tests/git-local.test.ts`; expect missing-module failure.
+- [ ] Implement shell helpers, `currentRepo`, `currentBranch`, `currentSha`, `saveTranscript`, and `readTranscript`.
+- [ ] Run `bun test tests/git-local.test.ts`; expect all tests to pass.
+- [ ] Commit with `feat(storage): add git and local transcript storage`.
 
 ### Task 4: CLI Commands
 

@@ -48,9 +48,9 @@ test("importSessions imports Claude and Codex transcripts by cwd git metadata", 
       branch: cwd.endsWith("/a") ? "branch-a" : "branch-b",
       sha: cwd.endsWith("/a") ? "aaa" : "bbb",
     }),
-    createGist: async (path) => {
+    saveTranscript: async (path) => {
       created.push(path);
-      return `gist:${path}`;
+      return `local:${path}`;
     },
   });
 
@@ -70,7 +70,7 @@ test("importSessions skips duplicate transcript hashes and non-git cwd", async (
   await recordSession(indexPath, {
     repo: "repo:/repo/a",
     branch: "branch-a",
-    gistUrl: "old-gist",
+    transcriptPath: "old-local-path",
     sessionId: "old-session",
     sha: "aaa",
     agent: "claude",
@@ -101,8 +101,8 @@ test("importSessions skips duplicate transcript hashes and non-git cwd", async (
       cwd.includes("non-git")
         ? null
         : { repo: "repo:/repo/a", branch: "branch-a", sha: "aaa" },
-    createGist: async () => {
-      throw new Error("duplicate or non-git transcript should not upload");
+    saveTranscript: async () => {
+      throw new Error("duplicate or non-git transcript should not be copied");
     },
   });
 
@@ -128,7 +128,7 @@ test("importSessions can backfill deleted worktrees for an explicit repo", async
       },
     ],
     gitInfoForCwd: async () => null,
-    createGist: async () => "gist:orphan",
+    saveTranscript: async () => "local:orphan",
   });
 
   expect(result).toMatchObject({ imported: 1, duplicates: 0, skipped: 0 });

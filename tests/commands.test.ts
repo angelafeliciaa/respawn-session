@@ -20,7 +20,7 @@ afterEach(async () => {
   await rm(dir, { recursive: true, force: true });
 });
 
-test("saveSession stores the active transcript gist for the current branch", async () => {
+test("saveSession stores the active transcript locally for the current branch", async () => {
   const indexPath = join(dir, "index.json");
   const transcriptPath = join(dir, "session.jsonl");
   await writeFile(transcriptPath, "transcript\n");
@@ -36,14 +36,14 @@ test("saveSession stores the active transcript gist for the current branch", asy
     currentRepo: async () => "repo",
     currentBranch: async () => "angela/fix-bugs",
     currentSha: async () => "abc123",
-    createGist: async () => "https://gist.github.com/a/111",
+    saveTranscript: async () => "/home/.respawn/transcripts/session.jsonl",
     now: () => new Date("2026-05-20T10:00:00.000Z"),
   });
 
   expect(result.session).toMatchObject({
     agent: "codex",
     branch: "angela/fix-bugs",
-    gistUrl: "https://gist.github.com/a/111",
+    transcriptPath: "/home/.respawn/transcripts/session.jsonl",
     relativePath: "2026/05/20/session.jsonl",
     repo: "repo",
     sessionId: "session-1",
@@ -53,7 +53,7 @@ test("saveSession stores the active transcript gist for the current branch", asy
 test("saveSession autosave skips unchanged transcript hashes", async () => {
   const indexPath = join(dir, "index.json");
   const transcriptPath = join(dir, "session.jsonl");
-  let gists = 0;
+  let localCopies = 0;
   await writeFile(transcriptPath, "same transcript\n");
 
   const first = await saveSession({
@@ -68,9 +68,9 @@ test("saveSession autosave skips unchanged transcript hashes", async () => {
     currentRepo: async () => "repo",
     currentBranch: async () => "main",
     currentSha: async () => "abc123",
-    createGist: async () => {
-      gists += 1;
-      return "https://gist.github.com/a/111";
+    saveTranscript: async () => {
+      localCopies += 1;
+      return "/home/.respawn/transcripts/111.jsonl";
     },
     now: () => new Date("2026-05-20T10:00:00.000Z"),
   });
@@ -86,17 +86,63 @@ test("saveSession autosave skips unchanged transcript hashes", async () => {
     currentRepo: async () => "repo",
     currentBranch: async () => "main",
     currentSha: async () => "abc123",
-    createGist: async () => {
-      gists += 1;
-      return "https://gist.github.com/a/222";
+    saveTranscript: async () => {
+      localCopies += 1;
+      return "/home/.respawn/transcripts/222.jsonl";
     },
     now: () => new Date("2026-05-20T10:01:00.000Z"),
   });
 
-  expect(gists).toBe(1);
+  expect(localCopies).toBe(1);
   expect(first.saved).toBe(true);
   expect(second.saved).toBe(false);
   expect(second.message).toBe("No transcript changes to autosave for main");
+});
+
+test("saveSession autosave can add PR metadata without duplicating unchanged transcripts", async () => {
+  const indexPath = join(dir, "index.json");
+  const transcriptPath = join(dir, "session.jsonl");
+  let localCopies = 0;
+  await writeFile(transcriptPath, "same transcript\n");
+
+  const baseDeps = {
+    indexPath,
+    mode: "autosave" as const,
+    locateActiveTranscript: () => ({
+      agent: "codex" as const,
+      path: transcriptPath,
+      sessionId: "session-1",
+      relativePath: "2026/05/20/session.jsonl",
+    }),
+    currentRepo: async () => "repo",
+    currentBranch: async () => "main",
+    currentSha: async () => "abc123",
+    saveTranscript: async () => {
+      localCopies += 1;
+      return "/home/.respawn/transcripts/session.jsonl";
+    },
+  };
+
+  await saveSession(baseDeps);
+  const result = await saveSession({
+    ...baseDeps,
+    sessionPatch: {
+      pr: 517,
+      prUrl: "https://github.com/org/repo/pull/517",
+    },
+  });
+
+  const index = JSON.parse(await readFile(indexPath, "utf8")) as {
+    sessions: Array<{ pr?: number; prUrl?: string }>;
+  };
+  expect(localCopies).toBe(1);
+  expect(result.saved).toBe(false);
+  expect(result.session.pr).toBe(517);
+  expect(index.sessions).toHaveLength(1);
+  expect(index.sessions[0]).toMatchObject({
+    pr: 517,
+    prUrl: "https://github.com/org/repo/pull/517",
+  });
 });
 
 test("saveSession fails clearly when no agent transcript is active", async () => {
@@ -108,7 +154,7 @@ test("saveSession fails clearly when no agent transcript is active", async () =>
   ).rejects.toThrow("No active Claude Code or Codex session transcript found");
 });
 
-test("resumeSession downloads the latest branch session and returns its resume command", async () => {
+test("resumeSession restores the latest local branch session and returns its resume command", async () => {
   const indexPath = join(dir, "index.json");
   const restoredPath = join(dir, "home/.codex/sessions/2026/05/20/new.jsonl");
   const checkouts: string[] = [];
@@ -116,7 +162,7 @@ test("resumeSession downloads the latest branch session and returns its resume c
   await recordSession(indexPath, {
     repo: "repo",
     branch: "angela/fix-bugs",
-    gistUrl: "old",
+    transcriptPath: "old",
     sessionId: "old-session",
     sha: "oldsha",
     agent: "codex",
@@ -126,7 +172,7 @@ test("resumeSession downloads the latest branch session and returns its resume c
   await recordSession(indexPath, {
     repo: "repo",
     branch: "angela/fix-bugs",
-    gistUrl: "new",
+    transcriptPath: "new",
     sessionId: "new-session",
     sha: "newsha",
     agent: "codex",
@@ -137,14 +183,14 @@ test("resumeSession downloads the latest branch session and returns its resume c
   const result = await resumeSession("angela/fix-bugs", {
     indexPath,
     currentRepo: async () => "repo",
-    downloadGist: async (gistUrl) => `downloaded:${gistUrl}\n`,
+    readTranscript: async (path) => `restored:${path}\n`,
     checkoutBranch: async (branch) => {
       checkouts.push(branch);
     },
     targetTranscriptPath: () => restoredPath,
   });
 
-  expect(await readFile(restoredPath, "utf8")).toBe("downloaded:new\n");
+  expect(await readFile(restoredPath, "utf8")).toBe("restored:new\n");
   expect(checkouts).toEqual(["angela/fix-bugs"]);
   expect(result.command).toEqual(["codex", "resume", "new-session"]);
 });
@@ -155,7 +201,7 @@ test("resumeSession can resolve a branch from an explicit repo", async () => {
   await recordSession(indexPath, {
     repo: "https://github.com/internetbackyard/gnomos-app",
     branch: "staging",
-    gistUrl: "repo-gist",
+    transcriptPath: "repo-transcript",
     sessionId: "repo-session",
     sha: "abc123",
     agent: "codex",
@@ -166,7 +212,7 @@ test("resumeSession can resolve a branch from an explicit repo", async () => {
   const result = await resumeSession("staging", {
     repo: "internetbackyard/gnomos-app",
     indexPath,
-    downloadGist: async () => "downloaded\n",
+    readTranscript: async () => "downloaded\n",
     checkoutBranch: async () => {},
     targetTranscriptPath: () => restoredPath,
   });
@@ -180,16 +226,17 @@ test("listSessions prints every saved session, including repeated branches", asy
   await recordSession(indexPath, {
     repo: "repo",
     branch: "angela/fix-bugs",
-    gistUrl: "url-1",
+    transcriptPath: "/home/.respawn/transcripts/url-1.jsonl",
     sessionId: "session-1",
     sha: "abc123",
     agent: "claude",
     savedAt: "2026-05-20T10:00:00.000Z",
+    pr: 10,
   });
   await recordSession(indexPath, {
     repo: "repo",
     branch: "angela/fix-bugs",
-    gistUrl: "url-2",
+    transcriptPath: "/home/.respawn/transcripts/url-2.jsonl",
     sessionId: "session-2",
     sha: "def456",
     agent: "codex",
@@ -199,8 +246,8 @@ test("listSessions prints every saved session, including repeated branches", asy
 
   await expect(listSessions({ indexPath })).resolves.toBe(
     [
-      "2026-05-20T10:00:00.000Z claude repo@angela/fix-bugs session-1 abc123 url-1",
-      "2026-05-20T11:00:00.000Z codex repo@angela/fix-bugs session-2 def456 url-2",
+      "2026-05-20T10:00:00.000Z claude repo@angela/fix-bugs session-1 abc123 #10 /home/.respawn/transcripts/url-1.jsonl",
+      "2026-05-20T11:00:00.000Z codex repo@angela/fix-bugs session-2 def456 - /home/.respawn/transcripts/url-2.jsonl",
     ].join("\n"),
   );
 });

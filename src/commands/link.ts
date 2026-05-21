@@ -1,14 +1,12 @@
 import {
   listPullRequests,
-  parseGitHubRepo,
   repoKey,
-  upsertRespawnComment,
   type PrInfo,
-  type RespawnPrTag,
 } from "../github";
 import {
   defaultIndexPath,
   readIndex,
+  updateSessions,
   type SavedSession,
 } from "../index-file";
 
@@ -23,14 +21,14 @@ export type LinkDeps = {
   indexPath?: string;
   dryRun?: boolean;
   listPullRequests?: typeof listPullRequests;
-  upsertRespawnComment?: typeof upsertRespawnComment;
 };
 
 export async function linkRepo(
   repo: string,
   deps: LinkDeps = {},
 ): Promise<LinkResult> {
-  const index = await readIndex(deps.indexPath ?? defaultIndexPath());
+  const indexPath = deps.indexPath ?? defaultIndexPath();
+  const index = await readIndex(indexPath);
   const key = repoKey(repo);
   const sessions = index.sessions.filter((session) => safeRepoKey(session.repo) === key);
   const prs = await (deps.listPullRequests ?? listPullRequests)(key);
@@ -50,21 +48,7 @@ export async function linkRepo(
       `  #${pr.number} ${pr.headRefName} (${matches.length} ${plural(matches.length, "session")})`,
     );
 
-    if (!deps.dryRun) {
-      const parsed = parseGitHubRepo(key);
-      await (deps.upsertRespawnComment ?? upsertRespawnComment)({
-        owner: parsed.owner,
-        name: parsed.name,
-        pr: pr.number,
-        tag: {
-          version: 1,
-          repo: key,
-          pr: pr.number,
-          branch: pr.headRefName,
-          sessions: matches.sort((a, b) => a.savedAt.localeCompare(b.savedAt)),
-        },
-      });
-    }
+    if (!deps.dryRun) await linkSessions(indexPath, matches, pr);
   }
 
   const unmatchedSessions = sessions.filter((session) => !used.has(session)).length;
@@ -80,6 +64,19 @@ export async function linkRepo(
   };
 }
 
+async function linkSessions(
+  indexPath: string,
+  matches: SavedSession[],
+  pr: PrInfo,
+): Promise<void> {
+  const keys = new Set(matches.map(sessionKey));
+  await updateSessions(indexPath, (session) =>
+    keys.has(sessionKey(session))
+      ? { ...session, pr: pr.number, prUrl: pr.url }
+      : session,
+  );
+}
+
 function sessionMatchesPr(session: SavedSession, pr: PrInfo): boolean {
   if (session.branch === pr.headRefName) return true;
   if (pr.headRefOid && session.sha === pr.headRefOid) return true;
@@ -89,11 +86,15 @@ function sessionMatchesPr(session: SavedSession, pr: PrInfo): boolean {
 function uniqueSessions(sessions: SavedSession[]): SavedSession[] {
   const seen = new Set<string>();
   return sessions.filter((session) => {
-    const key = `${session.agent}:${session.sessionId}:${session.gistUrl}`;
+    const key = sessionKey(session);
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
   });
+}
+
+function sessionKey(session: SavedSession): string {
+  return `${session.agent}:${session.sessionId}:${session.transcriptPath ?? session.gistUrl}`;
 }
 
 function safeRepoKey(repo: string): string | null {

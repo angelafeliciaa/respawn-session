@@ -1,30 +1,32 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { resumeCmd, targetTranscriptPath } from "../agents";
-import { checkoutBranch, currentRepo } from "../git";
-import { checkoutPr, getRespawnTag, repoKey } from "../github";
+import { checkoutBranch, checkoutSavedCommit, currentRepo } from "../git";
+import { checkoutPr, prNumberFromRef, repoKey } from "../github";
 import {
   defaultIndexPath,
   findLatestSession,
+  findLatestPrSession,
   type SavedSession,
 } from "../index-file";
-import { downloadGist } from "../storage/gist";
+import { readTranscript } from "../storage/local";
 
 export type ResumeDeps = {
   indexPath?: string;
   repo?: string;
   currentRepo?: typeof currentRepo;
-  downloadGist?: typeof downloadGist;
+  readTranscript?: typeof readTranscript;
   checkoutBranch?: typeof checkoutBranch;
   targetTranscriptPath?: typeof targetTranscriptPath;
 };
 
 export type ResumePrDeps = {
+  indexPath?: string;
   repo?: string;
   currentRepo?: typeof currentRepo;
-  getRespawnTag?: typeof getRespawnTag;
-  downloadGist?: typeof downloadGist;
+  readTranscript?: typeof readTranscript;
   checkoutPr?: typeof checkoutPr;
+  checkoutSavedCommit?: typeof checkoutSavedCommit;
   targetTranscriptPath?: typeof targetTranscriptPath;
 };
 
@@ -48,7 +50,9 @@ export async function resumeSession(
     throw new Error(`No saved respawn session found for ${repo}@${branch}`);
   }
 
-  const transcript = await (deps.downloadGist ?? downloadGist)(matchedSession.gistUrl);
+  const transcript = await (deps.readTranscript ?? readTranscript)(
+    sessionPath(matchedSession),
+  );
   const path = (deps.targetTranscriptPath ?? targetTranscriptPath)(matchedSession);
   await mkdir(dirname(path), { recursive: true });
   await writeFile(path, transcript);
@@ -70,23 +74,21 @@ export async function resumePrSession(
   session: SavedSession;
 }> {
   const repo = deps.repo ?? (await (deps.currentRepo ?? currentRepo)());
-  const tag = await (deps.getRespawnTag ?? getRespawnTag)(prRef, deps.repo);
-  if (!tag || !reposMatch(tag.repo, repo)) {
-    throw new Error(`No respawn PR tag found for ${repo}#${prRef}`);
-  }
-
-  const session = [...tag.sessions]
-    .sort((a, b) => a.savedAt.localeCompare(b.savedAt))
-    .at(-1);
+  const pr = Number(prNumberFromRef(prRef));
+  const indexPath = deps.indexPath ?? defaultIndexPath();
+  const session = Number.isFinite(pr)
+    ? (await findLatestPrSession(indexPath, { repo, pr })) ??
+      (await findLatestPrByRepoKey(indexPath, repo, pr))
+    : null;
   if (!session) {
-    throw new Error(`Respawn PR tag for ${repo}#${prRef} has no sessions`);
+    throw new Error(`No local respawn session found for ${repo}#${prRef}`);
   }
 
-  const transcript = await (deps.downloadGist ?? downloadGist)(session.gistUrl);
+  const transcript = await (deps.readTranscript ?? readTranscript)(sessionPath(session));
   const path = (deps.targetTranscriptPath ?? targetTranscriptPath)(session);
   await mkdir(dirname(path), { recursive: true });
   await writeFile(path, transcript);
-  await (deps.checkoutPr ?? checkoutPr)(prRef, deps.repo);
+  await checkoutPrOrSavedCommit(prRef, session, deps);
 
   return {
     command: resumeCmd(session.agent, session.sessionId),
@@ -114,6 +116,25 @@ async function findLatestByRepoKey(
   );
 }
 
+async function findLatestPrByRepoKey(
+  indexPath: string,
+  repo: string,
+  pr: number,
+): Promise<SavedSession | null> {
+  const { readIndex } = await import("../index-file");
+  const key = repoKey(repo);
+  const index = await readIndex(indexPath);
+  return (
+    index.sessions
+      .filter(
+        (session) =>
+          session.pr === pr && safeRepoKey(session.repo) === key,
+      )
+      .sort((a, b) => a.savedAt.localeCompare(b.savedAt))
+      .at(-1) ?? null
+  );
+}
+
 function safeRepoKey(repo: string): string | null {
   try {
     return repoKey(repo);
@@ -122,9 +143,31 @@ function safeRepoKey(repo: string): string | null {
   }
 }
 
-function reposMatch(a: string, b: string): boolean {
-  if (a === b) return true;
-  const aKey = safeRepoKey(a);
-  const bKey = safeRepoKey(b);
-  return Boolean(aKey && bKey && aKey === bKey);
+async function checkoutPrOrSavedCommit(
+  prRef: string,
+  session: SavedSession,
+  deps: ResumePrDeps,
+): Promise<void> {
+  try {
+    await (deps.checkoutPr ?? checkoutPr)(prRef, deps.repo);
+  } catch (error) {
+    const branch = `respawn/pr-${prNumberFromRef(prRef)}`;
+    try {
+      await (deps.checkoutSavedCommit ?? checkoutSavedCommit)(branch, session.sha);
+    } catch (fallbackError) {
+      throw new Error(
+        `Could not checkout PR ${prRef}, and could not restore saved commit ${session.sha}: ${String((fallbackError as Error).message ?? fallbackError)}. Original checkout error: ${String((error as Error).message ?? error)}`,
+      );
+    }
+  }
+}
+
+function sessionPath(session: SavedSession): string {
+  if (session.transcriptPath) return session.transcriptPath;
+  if (session.gistUrl) {
+    throw new Error(
+      "This saved session points to a GitHub gist. respawn is local-only now; re-import the session from a local transcript.",
+    );
+  }
+  throw new Error("Saved session is missing a local transcript path");
 }

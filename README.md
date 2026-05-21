@@ -1,8 +1,10 @@
 # respawn-session
 
-Save your Claude Code or Codex session to a git branch and resume it later from another worktree or machine.
+Save your Claude Code or Codex session to a git branch or PR and resume it later from another worktree.
 
-The session is the transcript. `respawn` uploads that transcript to a private GitHub gist, records it in `~/.respawn/index.json`, restores it later, checks out the branch, and starts the same agent with its resume command.
+The session is the transcript. `respawn` copies that transcript into `~/.respawn/transcripts/`, records metadata in `~/.respawn/index.json`, restores the transcript later, checks out the branch or PR, and starts the same agent with its resume command.
+
+`respawn` is local-only. It does not upload transcripts, write PR comments, use gists, or run telemetry.
 
 ## Install
 
@@ -10,24 +12,19 @@ The session is the transcript. `respawn` uploads that transcript to a private Gi
 npm install -g respawn-session
 ```
 
-The package ships a Bun TypeScript CLI with no build step. Bun 1.0 or newer and the GitHub CLI are required:
-
-```sh
-bun --version
-gh auth status
-```
+The package ships a Bun TypeScript CLI with no build step. Bun 1.0 or newer is required. The GitHub CLI is only needed for PR-aware commands such as `respawn 517`, `respawn tag`, and `respawn link`.
 
 ## Quick Start
 
-Initialize once on each machine. This creates `~/.respawn/index.json` and installs autosave Stop hooks for Claude Code and Codex:
+Initialize once on each machine:
 
 ```sh
 respawn init
 ```
 
-Work normally in Claude Code or Codex. `respawn init` makes sessions autosave when the agent stops. If the branch has a GitHub PR, autosave also updates a hidden PR comment so `respawn <pr-number>` works after the worktree or branch is gone.
+This creates `~/.respawn/index.json` and installs autosave Stop hooks for Claude Code and Codex. After that, sessions save automatically when the agent stops.
 
-To save immediately from inside an active agent session, run:
+Save immediately from inside an active agent session:
 
 ```sh
 respawn save
@@ -39,17 +36,33 @@ Resume the latest saved session for a branch:
 respawn angela/fix-bugs
 ```
 
-Resume from a PR that was autosaved or tagged:
+Resume the latest saved session for a PR:
 
 ```sh
-respawn 123
-respawn internetbackyard/gnomos-app#514
-respawn https://github.com/org/repo/pull/123
+respawn 517
+respawn internetbackyard/gnomos-app#517
+respawn https://github.com/org/repo/pull/517
 ```
 
 ## Common Workflows
 
-### Manual Branch Save
+### Autosave
+
+Run once per machine:
+
+```sh
+respawn init
+```
+
+Claude Code and Codex Stop hooks will run:
+
+```sh
+respawn autosave
+```
+
+Autosave hashes the transcript and skips unchanged sessions. If the current branch has a GitHub PR, autosave stores the PR number in the local index so `respawn 517` can find the session later.
+
+### Manual Save
 
 Inside an active Claude Code or Codex session:
 
@@ -63,55 +76,19 @@ Later, from a clone or worktree for the same repo:
 respawn <branch>
 ```
 
-Example:
+### Manual PR Tag
 
-```sh
-respawn angela/fix-bugs
-```
-
-### Autosave
-
-Run this once per machine:
-
-```sh
-respawn init
-```
-
-After that, Claude Code and Codex Stop hooks run:
-
-```sh
-respawn autosave
-```
-
-Autosave hashes the transcript and skips unchanged sessions, so repeated Stop events do not create duplicate gists. When the current branch has a GitHub PR, autosave also writes or updates the hidden respawn PR comment. That is the normal path for:
-
-```sh
-respawn 517
-```
-
-after you delete the worktree.
-
-### PR Tagging
-
-Use this when you want to force-save and attach the current session to the current PR manually:
+Use this when you want to force-save and link the current session to the current PR:
 
 ```sh
 respawn tag
 ```
 
-That writes or updates the same hidden metadata comment on the current GitHub PR. The comment stores session pointers, not the transcript body. Transcripts still live in your private gists.
+This writes only local metadata. It does not comment on the PR.
 
-Later, resume from the PR:
+### Link Existing Sessions To PRs
 
-```sh
-respawn 123
-respawn internetbackyard/gnomos-app#514
-respawn https://github.com/org/repo/pull/123
-```
-
-### Link Imported Sessions To PRs
-
-This is for old sessions from before autosave tagged PRs automatically. After `respawn import`, sync saved sessions to matching PRs in a repo:
+This is for sessions imported from before PR metadata existed:
 
 ```sh
 respawn import internetbackyard/gnomos-app
@@ -119,23 +96,13 @@ respawn link internetbackyard/gnomos-app --dry-run
 respawn link internetbackyard/gnomos-app
 ```
 
-Link matches sessions to PRs by branch name first, then by PR head SHA when available. It only writes PR metadata comments; it does not upload transcripts.
+`respawn link` reads PRs with `gh pr list`, matches sessions by branch name or PR head SHA, and writes the PR number into `~/.respawn/index.json`. It does not upload transcripts or write to GitHub.
 
-Always run the dry-run first. It prints the exact PRs it would touch:
+Always run the dry-run first:
 
 ```sh
 Would link 1 PRs in internetbackyard/gnomos-app; 0 sessions unmatched
   #514 feat/int-1194-tool-actor-context (1 session)
-```
-
-If the PR you want is not listed, `respawn` does not have enough local evidence to link it automatically yet. The usual cause is an old transcript from a deleted worktree that has not been imported with `respawn import owner/repo`.
-
-### List Saved Sessions
-
-Show every saved session in your local index:
-
-```sh
-respawn list
 ```
 
 ### Import Existing Sessions
@@ -146,7 +113,7 @@ Backfill sessions that already exist on this machine:
 respawn import
 ```
 
-Import scans Claude Code and Codex transcripts, groups them by their recorded cwd, and saves sessions whose cwd is still an available git worktree. It skips transcripts that are already in `~/.respawn/index.json` and skips deleted or non-git worktrees.
+Import scans Claude Code and Codex transcripts, groups them by their recorded cwd, and copies available sessions into `~/.respawn/transcripts/`.
 
 If the worktree was deleted, give `respawn` the repo explicitly:
 
@@ -154,27 +121,35 @@ If the worktree was deleted, give `respawn` the repo explicitly:
 respawn import internetbackyard/gnomos-app
 ```
 
-For deleted worktrees, `respawn` can still import Claude Code project transcripts when the original cwd contains the repo name and the transcript has embedded branch metadata. Those imported rows use `sha: "unknown"`, but `respawn link` can still match them to PRs by branch.
+For deleted worktrees, `respawn` can still import Claude Code project transcripts when the original cwd contains the repo name and the transcript has embedded branch metadata. Those rows may use `sha: "unknown"`, which means PR resume cannot fall back to a saved commit if the PR branch is gone.
+
+### List Sessions
+
+```sh
+respawn list
+```
+
+Branches and PRs can have multiple saved sessions. `respawn` resumes the newest `savedAt` entry.
 
 ## Commands
 
 | Command | What it does |
 | --- | --- |
 | `respawn init` | Creates the local index and installs autosave hooks |
-| `respawn save` | Saves the active Claude Code or Codex transcript |
-| `respawn autosave` | Saves only if the transcript changed and tags the current PR when one exists |
-| `respawn tag` | Saves and attaches session metadata to the current PR |
+| `respawn save` | Copies the active Claude Code or Codex transcript locally |
+| `respawn autosave` | Saves only if the transcript changed and links the current PR locally when one exists |
+| `respawn tag` | Saves and links the current session to the current PR locally |
 | `respawn import` | Backfills existing local Claude Code and Codex sessions |
 | `respawn import owner/repo` | Backfills deleted-worktree transcripts for a repo when branch metadata exists |
-| `respawn link owner/repo` | Links imported sessions to matching PRs |
-| `respawn link owner/repo --dry-run` | Previews PR links without writing comments |
+| `respawn link owner/repo` | Links imported sessions to matching PRs in the local index |
+| `respawn link owner/repo --dry-run` | Previews PR links without writing local metadata |
 | `respawn <branch>` | Restores the newest session for a branch |
 | `respawn owner/repo:branch` | Restores a branch session without being in that repo |
 | `respawn --repo owner/repo <branch>` | Restores a branch session for an explicit repo |
-| `respawn <pr-number>` | Restores the newest session from a tagged PR |
-| `respawn owner/repo#123` | Restores a tagged PR without being in that repo |
-| `respawn <pr-url>` | Restores the newest session from a tagged PR URL |
-| `respawn --repo owner/repo 123` | Restores a tagged PR for an explicit repo |
+| `respawn <pr-number>` | Restores the newest local session linked to that PR |
+| `respawn owner/repo#123` | Restores a PR session without being in that repo |
+| `respawn <pr-url>` | Restores the newest local session linked to that PR URL |
+| `respawn --repo owner/repo 123` | Restores a PR session for an explicit repo |
 | `respawn list` | Lists locally indexed sessions |
 | `respawn version` | Prints the installed CLI version |
 | `respawn update` | Updates the global npm install to the latest release |
@@ -192,29 +167,38 @@ npm install -g respawn-session@latest
 1. Claude Code via `CLAUDE_SESSION_ID`, then `~/.claude/sessions/*.json` and `~/.claude/projects/**/*.jsonl`
 2. Codex via `CODEX_TUI_SESSION_LOG_PATH`, `CODEX_SESSION_ID`, or the newest `~/.codex/sessions/**.jsonl` transcript for the current cwd
 
-It then runs:
+It copies the transcript to:
 
 ```sh
-gh gist create <transcript>.jsonl --desc "respawn: <repo>@<branch>"
+~/.respawn/transcripts/
 ```
 
-Before upload, `respawn` redacts common secret-shaped values from the copy it sends to GitHub: env-style keys such as `*_API_KEY`, `*_TOKEN`, `*_SECRET`, bearer tokens, and common provider token prefixes. The local transcript file is not modified.
-
-GitHub CLI gists are secret by default unless `--public` is passed. `respawn` does not pass `--public`.
-
-The local index lives at:
+and writes metadata to:
 
 ```sh
 ~/.respawn/index.json
 ```
 
-Branches can have multiple saved sessions. `respawn <branch>` restores the newest `savedAt` entry for the current repo and branch. `respawn list` shows every saved entry so older sessions remain discoverable.
+`respawn <branch>` restores the newest matching local transcript and runs:
 
-`respawn autosave` is what makes the main workflow work: it saves the transcript and, when `gh pr view` can resolve the current branch's PR, writes the session pointer to that PR. Later `respawn <pr-number>` reads that pointer, restores the transcript, checks out the PR, and resumes the agent.
+```sh
+git checkout <branch>
+claude --resume <session-id>
+# or
+codex resume <session-id>
+```
 
-`respawn import owner/repo` exists for old deleted worktrees. It scans local transcripts whose recorded cwd contains that repo name and imports the ones with embedded branch metadata. This is best-effort recovery for sessions that were created before `respawn` was installed.
+`respawn <pr-number>` finds the newest local session linked to that PR, restores the transcript, and tries:
 
-`respawn tag` writes a hidden metadata comment to the current PR. The comment stores session pointers, not the transcript body. Transcripts still live in your private gists. This lets `respawn <pr-url|number>` recover the newest tagged session after a branch is merged or deleted.
+```sh
+gh pr checkout <pr-number>
+```
+
+If the PR branch was deleted and the saved session has a commit SHA, it falls back to:
+
+```sh
+git checkout -B respawn/pr-<number> <saved-sha>
+```
 
 ## Agent Paths
 
@@ -230,13 +214,13 @@ Codex transcripts are restored under their saved relative path in:
 ~/.codex/sessions/
 ```
 
-Resume commands:
+## Local-Only Limits
+
+Local-only means another machine will not automatically have your sessions. To move sessions between machines, copy or sync:
 
 ```sh
-claude --resume <session-id>
-codex resume <session-id>
+~/.respawn/index.json
+~/.respawn/transcripts/
 ```
 
-## v0 Limits
-
-There is no hosted service and no telemetry. `respawn` redacts common secret-shaped values before upload, but transcripts can still contain proprietary code or credentials that do not match those patterns. Treat gists as sensitive even when secret, and rotate any credential that was uploaded before redaction was added.
+There is no hosted service and no telemetry. Transcripts can contain credentials and proprietary code, so remote storage should only be added later behind explicit opt-in, encryption, and clear warnings.
