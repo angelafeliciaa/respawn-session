@@ -1,5 +1,5 @@
 <h1 align="center">
-  <img src="docs/respawn-icon.svg" alt="respawn-session logo" width="80" height="80" /><br/>
+  <img src="docs/respawn-icon.svg" alt="respawn-session logo" width="100" height="100" /><br/>
   respawn-session
 </h1>
 
