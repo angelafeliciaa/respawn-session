@@ -1,55 +1,78 @@
+<div align="center">
+
 # respawn-session
 
-Resume an old Claude Code or Codex conversation from a branch or PR.
+Resume Claude Code and Codex conversations from a branch or PR.
 
-`respawn` is local-only. It copies transcripts into `~/.respawn/transcripts/`, keeps metadata in `~/.respawn/index.json`, and never uploads transcripts, writes PR comments, uses gists, or runs telemetry.
+[![npm](https://img.shields.io/npm/v/respawn-session?color=111827)](https://www.npmjs.com/package/respawn-session)
+[![license](https://img.shields.io/npm/l/respawn-session?color=111827)](./LICENSE)
+[![local-first](https://img.shields.io/badge/storage-local--only-111827)](#local-only)
+
+</div>
+
+`respawn` saves the transcript behind an agent session, ties it to your git branch or PR, and restores it later so the same agent can pick up the old conversation.
+
+No hosted service. No telemetry. No transcript uploads.
+
+## Why
+
+AI coding agents are stateless. The transcript is the session.
+
+If you delete a worktree, move machines, or come back to a merged PR weeks later, the diff is still there but the conversation that produced it is not. `respawn` keeps that context recoverable without keeping dead worktrees around.
 
 ## Install
 
 ```sh
 npm install -g respawn-session
-```
-
-Requires Bun 1.0 or newer. The GitHub CLI is only needed when resuming by PR number or PR URL.
-
-## Start Here
-
-Set up autosave once on each machine:
-
-```sh
 respawn init
 ```
 
-Then work normally in Claude Code or Codex. When the agent stops, `respawn` saves the transcript locally.
+Requires Bun 1.0+. GitHub CLI is only needed for PR resume, such as `respawn 517`.
 
-Resume later:
+## Usage
+
+Work normally in Claude Code or Codex. `respawn init` installs autosave hooks, so sessions are saved locally when the agent stops.
+
+Resume by branch:
 
 ```sh
 respawn angela/fix-bugs
+```
+
+Resume by PR:
+
+```sh
 respawn 517
 respawn https://github.com/org/repo/pull/517
 ```
 
-Save right now from inside an active agent session:
+Save manually from inside an active agent session:
 
 ```sh
 respawn save
 ```
 
+Import sessions that already exist on your laptop:
+
+```sh
+respawn import
+respawn list
+```
+
 ## Commands
 
-| Command | Use it for |
+| Command | What it does |
 | --- | --- |
 | `respawn init` | Turn on autosave |
 | `respawn save` | Save the current agent session now |
 | `respawn <branch>` | Resume the newest session for a branch |
 | `respawn <pr-number>` | Resume the newest session for a PR |
 | `respawn <pr-url>` | Resume the newest session for a PR URL |
-| `respawn import [owner/repo]` | Bring existing local transcripts into respawn |
+| `respawn import [owner/repo]` | Import existing local transcripts |
 | `respawn list` | Show saved sessions |
 | `respawn update` | Update the global install |
 
-That is the normal surface area. The extra commands are for maintenance:
+Maintenance commands:
 
 ```sh
 respawn tag                         # manually save and link the current PR locally
@@ -57,29 +80,22 @@ respawn link owner/repo --dry-run   # preview PR links for imported sessions
 respawn link owner/repo             # write those links into the local index
 ```
 
-## Import Old Sessions
+## Local Only
 
-If you already have Claude Code or Codex transcripts on this machine:
-
-```sh
-respawn import
-```
-
-If the worktree was deleted, pass the repo:
+`respawn` stores data here:
 
 ```sh
-respawn import internetbackyard/gnomos-app
-respawn link internetbackyard/gnomos-app --dry-run
-respawn link internetbackyard/gnomos-app
+~/.respawn/index.json
+~/.respawn/transcripts/
 ```
 
-`import` copies matching transcripts into `~/.respawn/transcripts/`. `link` only updates local PR metadata in `~/.respawn/index.json`.
+It does not upload transcripts, write PR comments, use gists, or phone home. To move sessions to another machine, copy or sync those two paths.
 
 ## How It Works
 
 `respawn save` finds the active Claude Code or Codex transcript, copies it locally, and records repo, branch, commit SHA, agent, session id, and PR number when available.
 
-`respawn <branch>` restores the transcript to the agent's expected path, checks out the branch, and runs:
+When you run `respawn <branch>` or `respawn <pr-number>`, it restores the transcript to the agent's expected path, checks out the branch or PR, and runs:
 
 ```sh
 claude --resume <session-id>
@@ -87,13 +103,13 @@ claude --resume <session-id>
 codex resume <session-id>
 ```
 
-`respawn <pr-number>` restores the newest local session linked to that PR and runs `gh pr checkout <number>`. If the PR branch is gone and the saved session has a SHA, it creates `respawn/pr-<number>` at that commit.
+If a PR branch is gone and the saved session has a SHA, `respawn` creates `respawn/pr-<number>` at that commit.
 
-## Moving Machines
-
-Local-only means another machine will not automatically have your sessions. Copy or sync:
+## Development
 
 ```sh
-~/.respawn/index.json
-~/.respawn/transcripts/
+bun test
+bun run typecheck
 ```
+
+MIT License.
