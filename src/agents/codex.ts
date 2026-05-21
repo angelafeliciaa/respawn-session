@@ -46,7 +46,12 @@ export function locateTranscript(
     .filter((session) => !desiredId || session.sessionId === desiredId);
 
   return [...candidates]
-    .sort((a, b) => statSync(a.path).mtimeMs - statSync(b.path).mtimeMs)
+    .sort((a, b) => {
+      const delta = statSync(a.path).mtimeMs - statSync(b.path).mtimeMs;
+      // Tie-break on path so equal mtimes don't depend on readdir order
+      // (codex paths embed YYYY/MM/DD, so lexicographic = chronological).
+      return delta !== 0 ? delta : a.path.localeCompare(b.path);
+    })
     .at(-1) ?? null;
 }
 
