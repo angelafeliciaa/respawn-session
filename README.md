@@ -17,8 +17,6 @@ Resume Claude Code and Codex sessions by branch or PR.
 
 It saves transcripts locally, indexes them by branch or PR, and restores the right session when you run `respawn <branch>` or `respawn <pr-number>`.
 
-No hosted service. No telemetry. No transcript uploads.
-
 ## Install
 
 ```sh
