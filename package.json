@@ -4,7 +4,7 @@
   "description": "Resume Claude Code and Codex sessions by branch or PR.",
   "type": "module",
   "bin": {
-    "respawn": "./src/cli.ts"
+    "respawn": "src/cli.ts"
   },
   "files": [
     "src",
