@@ -1,5 +1,7 @@
 <div align="center">
 
+<img width="192" height="192" alt="image" src="https://github.com/user-attachments/assets/a81f1481-f208-41a4-beb4-1747970790e9" />
+
 # respawn-session
 
 Resume Claude Code and Codex conversations from a branch or PR.
