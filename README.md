@@ -198,6 +198,8 @@ It then runs:
 gh gist create <transcript>.jsonl --desc "respawn: <repo>@<branch>"
 ```
 
+Before upload, `respawn` redacts common secret-shaped values from the copy it sends to GitHub: env-style keys such as `*_API_KEY`, `*_TOKEN`, `*_SECRET`, bearer tokens, and common provider token prefixes. The local transcript file is not modified.
+
 GitHub CLI gists are secret by default unless `--public` is passed. `respawn` does not pass `--public`.
 
 The local index lives at:
@@ -237,4 +239,4 @@ codex resume <session-id>
 
 ## v0 Limits
 
-There is no hosted service, no telemetry, and no secret redaction. Transcripts can contain proprietary code or credentials, so use storage you control and treat gists as sensitive even when secret.
+There is no hosted service and no telemetry. `respawn` redacts common secret-shaped values before upload, but transcripts can still contain proprietary code or credentials that do not match those patterns. Treat gists as sensitive even when secret, and rotate any credential that was uploaded before redaction was added.
