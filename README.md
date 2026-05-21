@@ -9,6 +9,7 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/angelafeliciaa/respawn-session/actions/workflows/ci.yml"><img src="https://github.com/angelafeliciaa/respawn-session/actions/workflows/ci.yml/badge.svg" alt="ci" /></a>
   <a href="https://www.npmjs.com/package/respawn-session"><img src="https://img.shields.io/npm/v/respawn-session?color=D97757" alt="npm" /></a>
   <a href="./LICENSE"><img src="https://img.shields.io/npm/l/respawn-session?color=D97757" alt="license" /></a>
   <a href="#local-only"><img src="https://img.shields.io/badge/storage-local--only-D97757" alt="local-first" /></a>
