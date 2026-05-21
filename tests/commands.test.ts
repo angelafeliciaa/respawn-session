@@ -8,7 +8,7 @@ import { resumeSession } from "../src/commands/resume";
 import { listSessions } from "../src/commands/list";
 import { initRespawn } from "../src/commands/init";
 import { updateRespawn, versionText } from "../src/commands/update";
-import { route } from "../src/cli";
+import { helpText, route } from "../src/cli";
 
 let dir: string;
 
@@ -418,4 +418,23 @@ test("route maps raw argv to commands", () => {
     name: "resume",
     branch: "angela/fix-bugs",
   });
+});
+
+test("helpText keeps the main command surface small", () => {
+  expect(helpText()).toBe(
+    [
+      "Usage:",
+      "  respawn init",
+      "  respawn save",
+      "  respawn <branch>",
+      "  respawn <pr-url|number>",
+      "  respawn import [owner/repo]",
+      "  respawn update",
+      "  respawn list",
+      "",
+      "Advanced:",
+      "  respawn tag",
+      "  respawn link owner/repo [--dry-run]",
+    ].join("\n"),
+  );
 });

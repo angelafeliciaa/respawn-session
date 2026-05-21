@@ -121,24 +121,20 @@ export async function main(args = Bun.argv.slice(2)): Promise<void> {
   process.exit(await proc.exited);
 }
 
-function helpText(): string {
+export function helpText(): string {
   return [
     "Usage:",
+    "  respawn init",
     "  respawn save",
-    "  respawn autosave",
-    "  respawn tag",
     "  respawn <branch>",
     "  respawn <pr-url|number>",
-    "  respawn owner/repo:branch",
-    "  respawn owner/repo#123",
-    "  respawn --repo owner/repo <branch|number>",
-    "  respawn list",
-    "  respawn init",
-    "  respawn import",
-    "  respawn import owner/repo",
-    "  respawn link owner/repo [--dry-run]",
-    "  respawn version",
+    "  respawn import [owner/repo]",
     "  respawn update",
+    "  respawn list",
+    "",
+    "Advanced:",
+    "  respawn tag",
+    "  respawn link owner/repo [--dry-run]",
   ].join("\n");
 }
 
