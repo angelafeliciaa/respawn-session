@@ -17,7 +17,7 @@
 
 ---
 
-`respawn` saves your agent transcripts locally, indexes them by branch or PR, and restores the right one when you run `respawn <branch>` or `respawn <pr-number>`. Delete worktrees, switch machines, come back to a merged PR weeks later &mdash; the conversation comes back with it.
+`respawn` saves your agent transcripts locally, indexes them by branch or PR, and restores your conversation when you run `respawn <branch>` or `respawn <pr-number>`. 
 
 ## Install
 
